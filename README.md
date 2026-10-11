@@ -72,7 +72,7 @@ The trained models are in `models/`. To rebuild everything from the CSV: `python
 
 Checked the way a reviewer would run it: a fresh clone into an empty folder, a new virtual environment, `pip install -r requirements.txt`, then `pytest` (31 passed) and the program in replay and live modes. Done on Windows with Python 3.11.9 only; Linux and macOS were not tried.
 
-The author also reviewed the code, to the extent of their own skills, and ran the program by hand with different moments, modes and parameters. The results of these manual runs were not saved, so they are mentioned here as a statement, not as evidence.
+The author also reviewed the code, to the extent of his own skills, and ran the program by hand with different moments, modes and parameters. The results of these manual runs were not saved, so they are mentioned here as a statement, not as evidence.
 
 ## Why Kyiv only
 
