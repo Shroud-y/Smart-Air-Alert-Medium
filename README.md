@@ -1,142 +1,143 @@
-# SAAM — прогноз повітряних тривог для Києва
+# SAAM — air raid alert forecast for Kyiv
 
-MVP для конкурсу: консольна програма, що показує карту поточних повітряних тривог в Україні та прогнозує для **міста Києва**:
+A contest MVP: a console program that shows a map of current air raid alerts in Ukraine and forecasts, for the **city of Kyiv**:
 
-- якщо тривоги немає — **чи почнеться вона** протягом наступних `H` хвилин;
-- якщо тривога вже є — **чи закінчиться вона** протягом наступних `H` хвилин.
+- if there is no alert — **whether one will start** within the next `H` minutes;
+- if an alert is active — **whether it will end** within the next `H` minutes.
 
-Типове `H` = 30 хв. Вивід для користувача бінарний (так / ні); ймовірності та технічні деталі — у дашбордах.
+Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities and technical details live in dashboards.
 
-> Статус: узгоджено план і стек, перевірено дані. Коду моделі ще немає.
-> Цей файл доповнюється по ходу розробки: рішення, аналіз даних, зміни думки, взаємні правки.
+> Status: plan and stack agreed, data verified. No model code yet.
+> This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
 
-## Чому лише Київ
+## Why Kyiv only
 
-Ймовірність тривоги в Києві сильно залежить від стану сусідніх областей (Чернігівська, Київська тощо). Це дає моделі сильний сигнал і робить задачу здійсненною за два дні. Гіпотезу підтверджує [стаття arXiv 2411.14625](https://arxiv.org/html/2411.14625v1): стан сусідніх областей — найважливіші ознаки.
+The chance of an alert in Kyiv depends strongly on the state of neighbouring oblasts (Chernihiv, Kyiv oblast and others). That gives the model a strong signal and keeps the task feasible in two days. The hypothesis is supported by [arXiv 2411.14625](https://arxiv.org/html/2411.14625v1): the state of neighbouring oblasts is the most important group of features.
 
-## Ключові рішення
+## Key decisions
 
-| # | Рішення | Чому |
+| # | Decision | Why |
 |---|---|---|
-| 1 | Дві окремі задачі: «початок» і «кінець» тривоги | Спільна ціль «тривога активна через N хв» майже повністю пояснюється тим, що тривога просто триває, і метрики виходять оманливо високі |
-| 2 | Моделі: ймовірнісний алгоритм **і** LightGBM, обидві порівнюються з бейзлайнами | Нейронну мережу відкинуто: початків тривог у Києві лише ~2,3 тис., характер атак змінюється, за 2 дні вона навряд чи обійде бустинг |
-| 3 | Історичні дані: `official_data_uk.csv` з [Vadimkin/ukrainian-air-raid-sirens-dataset](https://github.com/Vadimkin/ukrainian-air-raid-sirens-dataset) (MIT) | Офіційне джерело, з 15.03.2022, Київ — окремий регіон. Волонтерські дані відкинуто як ризикованіші |
-| 4 | Зведення до області: тривога в області = тривога **хоч в одному** районі чи громаді | У даних змішані рівні (область / район / громада), з 2025 переважають районні. Правило дає єдине представлення за всі роки |
-| 5 | Тривоги з короткою паузою між ними **не склеюємо** | Склеювання спотворило б дані й ціль «початок» |
-| 6 | Повні дублі рядків прибирає код завантаження; сирий CSV у git не змінюється | Відтворюваність і можливість звірити з оригіналом |
-| 7 | Час: зберігання й усі обчислення проміжків — в **UTC**; година доби та день тижня — за **київським часом** (`Europe/Kyiv`) | Див. розділ «Час» |
-| 8 | Поточні тривоги: [ubilling.net.ua/aerialalerts](https://ubilling.net.ua/aerialalerts/) у режимі `?raw` | Без токена; дає райони, час початку (UTC) і рівень тривоги. alerts.in.ua відкинуто: токен за заявкою, можемо не встигнути |
-| 9 | Режим `--replay <дата-час>`: програвання історії з датасету | Запасний варіант, якщо API недоступний, і спосіб показати роботу на реальній атаці |
-| 10 | Інтерфейс: консоль, плиткова карта України (клітинка на область), під нею прогноз. Без веб-застосунку | Справжній контур у ASCII дорогий і крихкий. Малювання — одна функція; якщо плитки не вдадуться, замінюємо на список областей |
-| 11 | Дашборди: графіки matplotlib у `reports/figures/`, вставляються в цей README; у консолі — панель `--debug` | Потрібні для налагодження й для опису аналізу даних |
-| 12 | Тести на pytest | Головний ризик — витік майбутнього в ознаки; він дає хибно добрі метрики й оком не помітний |
+| 1 | Two separate tasks: alert "start" and alert "end" | A combined target "alert active in N min" is explained almost entirely by an alert simply continuing, which gives misleadingly high metrics |
+| 2 | Models: a probabilistic algorithm **and** LightGBM, both compared against baselines | A neural network was rejected: Kyiv has only ~2.3k alert starts, attack patterns drift, and in 2 days it is unlikely to beat boosting |
+| 3 | Historical data: `official_data_uk.csv` from [Vadimkin/ukrainian-air-raid-sirens-dataset](https://github.com/Vadimkin/ukrainian-air-raid-sirens-dataset) (MIT) | Official source, starts 2022-03-15, Kyiv city is a separate region. Volunteer data rejected as riskier |
+| 4 | Aggregation to oblast: an oblast is under alert if **at least one** of its raions or hromadas is | The data mixes levels (oblast / raion / hromada), raion-level dominates from 2025. The rule gives one representation for all years |
+| 5 | Alerts separated by a short pause are **not merged** | Merging would distort the data and the "start" target |
+| 6 | Exact duplicate rows are removed by the loading code; the raw CSV in git is not modified | Reproducibility, and the raw file can always be checked against the original |
+| 7 | Time: storage and all interval computations in **UTC**; hour of day and day of week in **Kyiv time** (`Europe/Kyiv`) | See "Time" |
+| 8 | Live alerts: [ubilling.net.ua/aerialalerts](https://ubilling.net.ua/aerialalerts/) in `?raw` mode | No token; returns raions, start time (UTC) and alert level. alerts.in.ua rejected: token by application, may not arrive in time |
+| 9 | `--replay <datetime>` mode: plays back history from the dataset | Fallback if the API is unavailable, and a way to demo the program on a real attack |
+| 10 | Interface: console, tile map of Ukraine (one cell per oblast), forecast below. No web app | A true ASCII outline is expensive and fragile. Rendering is one function; if tiles do not work out, it is replaced with a list of oblasts |
+| 11 | Dashboards: matplotlib figures in `reports/figures/`, embedded in this README; a `--debug` panel in the console | Needed for debugging and for describing the data analysis |
+| 12 | Tests with pytest | The main risk is leaking the future into features; it gives falsely good metrics and is invisible to the eye |
 
-## Дані
+## Data
 
-Файл `official_data_uk.csv` — знімок, останній запис 2026-09-07 (офіційний файл у репозиторії відтоді не оновлюється).
+`official_data_uk.csv` is a snapshot; the last record is 2026-09-07 (the official file in the source repository has not been updated since).
 
-- Колонки: `oblast, raion, hromada, level, started_at, finished_at, source`.
-- 299 275 рядків, з них унікальних **185 430**. 113 845 рядків повторені рівно двічі.
-- Дублі — повні копії: збігаються всі 7 колонок. Рядків з тим самим місцем і початком, але іншим кінцем чи рівнем — 0. Дублі є до 2026-01-25, далі їх немає.
-- Порожніх `finished_at` — 0.
-- Усі мітки часу мають суфікс `+00:00`.
+- Columns: `oblast, raion, hromada, level, started_at, finished_at, source`.
+- 299,275 rows, of which **185,430** are unique. 113,845 rows appear exactly twice.
+- Duplicates are exact copies: all 7 columns match. Rows with the same place and start but a different end or level: 0. Duplicates exist up to 2026-01-25, none after.
+- Empty `finished_at`: 0.
+- Every timestamp carries the `+00:00` suffix.
 
-Перевірити кількість рядків і унікальних (має вивести `299275 185430`):
+To check the row and unique counts (should print `299275 185430`):
 
 ```bash
 python -X utf8 -c "import csv;r=list(csv.reader(open('official_data_uk.csv',encoding='utf-8')))[1:];print(len(r),len(set(map(tuple,r))))"
 ```
 
-### Київ після видалення дублів
+### Kyiv after removing duplicates
 
-| Рік | Рядків у файлі | Тривог | Годин тривоги |
+| Year | Rows in file | Alerts | Hours under alert |
 |---|---|---|---|
-| 2022 (з 15.03) | 1 010 | 505 | 541 |
+| 2022 (from 15 Mar) | 1,010 | 505 | 541 |
 | 2023 | 602 | 301 | 397 |
-| 2024 | 1 004 | 502 | 542 |
-| 2025 | 1 022 | 511 | 740 |
-| 2026 (до 07.09) | 503 | 448 | 405 |
-| **Разом** | 4 141 | **2 267** | |
+| 2024 | 1,004 | 502 | 542 |
+| 2025 | 1,022 | 511 | 740 |
+| 2026 (to 7 Sep) | 503 | 448 | 405 |
+| **Total** | 4,141 | **2,267** | |
 
-Тривалість: медіана 38 хв, 95-й перцентиль 231 хв, максимум 673 хв. Перекриттів інтервалів немає. 10 тривог коротші за 2 хв; 29 пар тривог розділені менш ніж 5 хв (не склеюємо, рішення 5).
+Duration: median 38 min, 95th percentile 231 min, maximum 673 min. No overlapping intervals. 10 alerts are shorter than 2 min; 29 pairs of alerts are less than 5 min apart (not merged, decision 5).
 
-## Час
+## Time
 
-База — в UTC, зміщення стале цілий рік. Перевірено на відомих подіях: масований удар 10.10.2022 у базі починається о 03:47, що відповідає 06:47 за київським літнім часом.
+The dataset is in UTC with a constant offset all year. Checked against known events: the mass strike of 2022-10-10 starts at 03:47 in the data, which is 06:47 Kyiv summer time.
 
-Проблема: Україна переходить між UTC+2 (зима) і UTC+3 (літо), тому та сама година UTC — це різна година для людей. У даних це видно: пік початків тривог у Києві в UTC з'їжджає з 21:00 влітку на 22:00–23:00 взимку, а за київським часом лишається близько півночі (2024–2026, вибірка невелика).
+The problem: Ukraine switches between UTC+2 (winter) and UTC+3 (summer), so the same UTC hour is a different hour for people. The data shows it: the peak of alert starts in Kyiv moves from 21:00 UTC in summer to 22:00–23:00 UTC in winter, while in Kyiv time it stays around midnight (2024–2026, small sample).
 
-Розглянуті варіанти:
+Options considered:
 
-| Варіант | Суть | Вердикт |
+| Option | Idea | Verdict |
 |---|---|---|
-| **А** | Обчислення в UTC, календарні ознаки — за `Europe/Kyiv` | **обрано** |
-| Б | Перевести всю базу в київський час | Осіння година 03:00–04:00 трапляється двічі, весняної не існує; довелося б зберігати зміщення біля кожної мітки |
-| В | Усе в UTC + ознака «літній час» | Бейзлайни зсув не вивчать, порівняння моделей стане нечесним |
-| Г | Фіксоване зміщення цілий рік | Пів року година хибна на одиницю |
+| **A** | Computations in UTC, calendar features in `Europe/Kyiv` | **chosen** |
+| B | Convert the whole dataset to Kyiv time | The autumn hour 03:00–04:00 occurs twice, the spring one does not exist; an offset would have to be stored next to every timestamp |
+| C | Everything in UTC + a "summer time" feature | Baselines cannot learn the shift, so the model comparison becomes unfair |
+| D | Fixed offset all year | The hour is off by one for half of the year |
 
-Як працює А: часова сітка, стан регіонів, тривалості, лаги й ціль рахуються в UTC, де доба завжди 24 години. Для кожної точки сітки окремо обчислюється київська година й день тижня через `zoneinfo`. У ніч переходу сітка йде рівно; просто восени дві сусідні години отримують однаковий ярлик, а навесні один ярлик пропускається.
+How A works: the time grid, region states, durations, lags and the target are computed in UTC, where a day is always 24 hours. For each grid point the Kyiv hour and day of week are computed separately with `zoneinfo`. On a switch night the grid stays regular; in autumn two neighbouring hours simply get the same label, and in spring one label is skipped.
 
-Жодна київська тривога в наборі не перетинає момент переходу (перевірено на всіх 9 переходах); інші області не перевірялись.
+No Kyiv alert in the dataset spans a switch moment (checked on all 9 switches); other oblasts were not checked.
 
-## Оцінювання
+## Evaluation
 
-**Метрики**
+**Metrics**
 
-- PR-AUC — основна (класи незбалансовані).
-- Brier score і крива калібрування.
-- Precision / recall / F1 на порозі, підібраному на валідації; з цього порога береться відповідь так / ні.
-- Кількість хибних «так» на добу.
+- PR-AUC — primary (classes are imbalanced).
+- Brier score and calibration curve.
+- Precision / recall / F1 at a threshold picked on validation; the yes / no answer comes from this threshold.
+- Number of false "yes" per day.
 
-**Бейзлайни**
+**Baselines**
 
-1. Кліматологія: частота початку тривоги за київською годиною × днем тижня.
-2. Правило сусідів: «так», якщо зараз тривога в Київській або суміжній області.
-3. Логістична регресія лише на поточному стані областей.
+1. Climatology: frequency of an alert start by Kyiv hour × day of week.
+2. Neighbour rule: "yes" if Kyiv oblast or an adjacent oblast is under alert right now.
+3. Logistic regression on the current state of oblasts only.
 
-Для задачі «кінець»: емпірична крива тривалості — P(кінець за `H` хв | тривога триває вже `t` хв).
+For the "end" task: the empirical duration curve — P(end within `H` min | alert has lasted `t` min).
 
-**Розбиття за часом** (без перемішування, проміжок ≥ `H` між частинами)
+**Time split** (no shuffling, gap ≥ `H` between parts)
 
-| Частина | Період |
+| Part | Period |
 |---|---|
 | Train | 2022-03-15 … 2026-03-31 |
 | Validation | 2026-04-01 … 2026-06-30 |
 | Test | 2026-07-01 … 2026-09-06 |
 
-Дати можуть бути уточнені після EDA (старі роки можуть шкодити через зміну характеру атак); зміна буде записана тут.
+The dates may be adjusted after EDA (old years may hurt because attack patterns changed); any change will be recorded here.
 
-## Відомі обмеження
+## Known limitations
 
-- **Розрив у даних.** Історія закінчується 2026-09-07; між навчанням і роботою наживо понад місяць без даних.
-- **Жовті й червоні тривоги.** З вересня 2026 тривоги мають рівні (жовта — дрони, червона — ракети); ubilling їх повертає. Модель вчиться на даних без рівнів, тому прогноз наживо — поза розподілом навчання, і перевірити якість на новому режимі нічим. Дата запровадження (6 вересня) взята зі стороннього проєкту, не з офіційного джерела.
-- **Зміна рівня деталізації.** Після переходу на районні тривоги (2025) ознака «тривога в області» може спрацьовувати частіше, ніж раніше. Перевіряється в EDA.
-- **Джерело наживо — волонтерське.** Ubilling проксує сторонні джерела, які між собою не завжди збігаються; не для прийняття рішень про безпеку.
+- **Data gap.** History ends on 2026-09-07; there is more than a month without data between training and live use.
+- **Yellow and red alerts.** Since September 2026 alerts carry levels (yellow — drones, red — missiles); ubilling returns them. The model is trained on data without levels, so the live forecast is outside the training distribution and there is nothing to measure its quality on under the new regime. The introduction date (6 September) comes from a third-party project, not an official source.
+- **Change of granularity.** After the move to raion-level alerts (2025) the "oblast under alert" feature may fire more often than before. To be checked in EDA.
+- **The live source is volunteer-run.** Ubilling proxies third-party sources that do not always agree with each other; not for safety decisions.
 
-## Журнал правок
+## Corrections log
 
-Фіксуємо, хто кого виправив і що змінилось.
+Who corrected whom and what changed.
 
-| Хто | Що було | Що стало |
+| Who | Before | After |
 |---|---|---|
-| Claude → автор | Вибір «ймовірнісний алгоритм чи нейронна мережа» | Додано проміжний варіант — градієнтний бустинг; нейронну мережу відкинуто |
-| Claude → автор | Якщо API недоступний — прогнозувати лише за днем і часом, без поточного стану | Знайдено API без токена (ubilling); поточний стан сусідів лишається головним сигналом |
-| Автор → Claude | Claude написав, що датасет оновлюється щодня | Щодня оновлюються лише волонтерські дані; офіційний файл зупинився 2026-09-07. Тестовий період скорочено до 2026-09-06 |
-| Автор → Claude | Claude запропонував не комітити CSV | CSV закомічено в репозиторій |
-| Claude → Claude | «До грудня 2025 тривоги були по областях» | Рядки рівня громади є з 2022, перехід на райони — протягом 2025 |
-| Автор, перевірив Claude | Підозра: 1 010 тривог у Києві за 2022 — забагато | Знайдено повні дублі в усьому файлі; реальна кількість 505 |
-| Автор, перевірив Claude | Підозра: час у базі — UTC, і перехід на літній час створить проблему | Підтверджено; обрано варіант А |
-| Claude → Claude | Аргумент проти варіанту Б: тривоги через перехід отримають хибну тривалість | Жодна київська тривога перехід не перетинає; аргумент лишився тільки про складність коду |
+| Claude → author | The choice was "probabilistic algorithm or neural network" | A middle option was added — gradient boosting; the neural network was rejected |
+| Claude → author | If the API is unavailable, forecast from day and time only, without the current state | A token-free API (ubilling) was found; the current state of neighbours stays the main signal |
+| Author → Claude | Claude wrote that the dataset is updated daily | Only the volunteer data is updated daily; the official file stopped on 2026-09-07. The test period was shortened to 2026-09-06 |
+| Author → Claude | Claude suggested not committing the CSV | The CSV is committed to the repository |
+| Claude → Claude | "Before December 2025 alerts were oblast-level" | Hromada-level rows exist from 2022, the move to raions happened during 2025 |
+| Author, verified by Claude | Suspicion: 1,010 alerts in Kyiv in 2022 is too many | Exact duplicates found across the whole file; the real count is 505 |
+| Author, verified by Claude | Suspicion: time in the dataset is UTC and summer time will cause a problem | Confirmed; option A chosen |
+| Claude → Claude | Argument against option B: alerts spanning a switch would get a wrong duration | No Kyiv alert spans a switch; only the code-complexity argument remains |
+| Author → Claude | Claude wrote the README in Ukrainian | The whole project is in English |
 
-## Стек
+## Stack
 
 Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich · requests · pytest
 
-## План
+## Plan
 
-1. EDA: стан областей у часі, зв'язок сусідів із Києвом, ефект переходу на районні тривоги → графіки в `reports/figures/`.
-2. Завантаження й очищення даних, часова сітка, ознаки, ціль + тести на витік.
-3. Бейзлайни й метрики.
-4. Ймовірнісний алгоритм і LightGBM, порівняння.
-5. Клієнт ubilling, режим `--replay`.
-6. Консольний інтерфейс: карта, прогноз, панель `--debug`.
+1. EDA: oblast states over time, the link between neighbours and Kyiv, the effect of the move to raion-level alerts → figures in `reports/figures/`.
+2. Data loading and cleaning, time grid, features, target + leak tests.
+3. Baselines and metrics.
+4. Probabilistic algorithm and LightGBM, comparison.
+5. Ubilling client, `--replay` mode.
+6. Console interface: map, forecast, `--debug` panel.
