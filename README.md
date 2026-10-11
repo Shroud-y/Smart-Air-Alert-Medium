@@ -10,6 +10,8 @@ Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities
 > Status: all six steps of the plan are done. The console program runs live and in replay. On the test period the "start" forecast held up; the "end" forecast did not meet its target — see "Test results".
 > This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
 
+**IMPORTANT**: see */log/transcript.md* for the Claude session transcript
+
 ## In short
 
 A console program that shows where air raid alerts are active in Ukraine and answers yes / no for the city of Kyiv: will an alert start (or, if one is on, end) within 30 minutes.
