@@ -1,0 +1,5 @@
+What went wrong: on the test the "end" forecast gave 45% against a 60% target, and on "start" LightGBM showed no difference from logistic regression. Several guesses failed - the official database had stopped updating, validation was too small, some features acted like a hidden clock.
+
+How I adjusted: I extended validation, checked claims against data, froze the protocol before testing, and added bootstrap intervals.
+
+Why the final version is better: on the default period the first LightGBM launch lost to a simple baseline. The final version is tested once, reports its uncertainty and shows its weakness under the answer.
