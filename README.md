@@ -7,7 +7,7 @@ A contest MVP: a console program that shows a map of current air raid alerts in 
 
 Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities and technical details live in dashboards.
 
-> Status: models trained and evaluated once on the test period. The "start" forecast held up; the "end" forecast did not meet its target — see "Test results". The console program is next.
+> Status: all six steps of the plan are done. The console program runs live and in replay. On the test period the "start" forecast held up; the "end" forecast did not meet its target — see "Test results".
 > This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
 
 ## How to run
@@ -24,10 +24,16 @@ python -m saam
 python -m saam --replay "2026-08-27 23:40" --debug
 ```
 
-- Without options the current state comes from the ubilling API; no key is needed.
-- `--replay "YYYY-MM-DD HH:MM"` plays back a moment (Kyiv time) from the dataset, which ends on 2026-09-07. It works offline and is the fallback if the API is unavailable.
+- The program keeps running and refreshes the screen until Ctrl+C. Without options it takes the current state from the ubilling API about once a minute; no key is needed.
+- `--replay "YYYY-MM-DD HH:MM"` plays the dataset back from that moment (Kyiv time), moving 5 minutes forward every 2 seconds; the dataset ends on 2026-09-07. It works offline and is the fallback if the API is unavailable.
+- `--once` prints a single screen and exits. `--interval SECONDS` and `--step MINUTES` change the refresh rate and the replay step.
 - `--mode recent` (default) uses the model trained from 2024-07, `--mode full` the one trained on the full history.
 - `--debug` adds the probability, the threshold, the measured test quality, the matching cell of the frequency table and the model's main features.
+- `--list` shows the regions under alert as one line instead of the wall; `--plain` prints plain text without colours, once.
+
+![Console, replay with debug panel](reports/figures/console_replay.svg)
+
+All regions are shown as a wall of equal bricks, Kyiv city first. Live data colours a brick red (missile threat) or yellow (drone threat); the dataset has no levels, so in replay an alert is simply red. Crimea is never reported by the sources used, and Luhansk oblast is absent from the dataset (permanent alert), so they are shown as "no data". If an update fails while the program is running, the last screen stays and the failure is shown under it.
 
 The trained models are in `models/`. To rebuild everything from the CSV: `python -X utf8 scripts/final.py`. Tests: `pytest`.
 
@@ -48,7 +54,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 7 | Time: storage and all interval computations in **UTC**; hour of day and day of week in **Kyiv time** (`Europe/Kyiv`) | See "Time" |
 | 8 | Live alerts: [ubilling.net.ua/aerialalerts](https://ubilling.net.ua/aerialalerts/) in `?raw` mode | No token; returns raions, start time (UTC) and alert level. alerts.in.ua rejected: token by application, may not arrive in time. A token for alerts.in.ua was obtained later, but ubilling stays the default: a key cannot be committed, and the jury must be able to run the program without one |
 | 9 | `--replay <datetime>` mode: plays back history from the dataset | Fallback if the API is unavailable, and a way to demo the program on a real attack |
-| 10 | Interface: console, tile map of Ukraine (one cell per oblast), forecast below. No web app | A true ASCII outline is expensive and fragile. Rendering is one function; if tiles do not work out, it is replaced with a list of oblasts |
+| 10 | Interface: console; all regions as a wall of equal coloured bricks, forecast below. No web app | A true ASCII outline of Ukraine was judged expensive and fragile from the start. A tile map placed by geography was built as a prototype and worked, but the author did not like how it looked and replaced it with a plain wall. Rendering is one function, so the swap touched nothing else |
 | 11 | Dashboards: matplotlib figures in `reports/figures/`, embedded in this README; a `--debug` panel in the console | Needed for debugging and for describing the data analysis |
 | 12 | Tests with pytest | The main risk is leaking the future into features; it gives falsely good metrics and is invisible to the eye |
 | 13 | On top of the "at least one raion" flag, each oblast also gets: the number of raions under alert, minutes since its latest alert started, and separate flags for the raions of Kyiv oblast | EDA: the plain flag is saturated for frontline and northern oblasts (Chernihiv is under alert 60% of the time) and carries almost no signal there |
@@ -61,6 +67,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 20 | The probabilistic algorithm is a table of conditional frequencies over three factors, smoothed towards the overall rate. "Start": state of Kyiv oblast (quiet / alert < 15 / 15–60 / > 60 min) × number of adjacent oblasts under alert (0, 1, 2, 3+) × time of day (4 parts), 64 cells. "End": how long the Kyiv alert has lasted (5 bands) × Kyiv oblast quiet or not × time of day | Every forecast can be read as a sentence ("night, oblast under alert for 20 min, three neighbours — 23%"), which suits the `--debug` panel. Naive Bayes over all flags was rejected: it assumes independent regions, and they are strongly linked |
 | 21 | The yes / no answer is cautious by design, and the caution points in opposite directions for the two tasks. "Start": the threshold must catch at least **40%** of pre-alert moments (recall). "End": a "yes, it will end" must be right at least **60%** of the time (precision) | The author's deliberate choice: an extra warning is better than a missed alert, and a perfect result is not expected from a learning project. For "end" the dangerous mistake is the opposite one — promising an all-clear that does not come. The numbers were chosen from a measured trade-off, see "Operating point"; Claude had proposed 50% and 70% |
 | 22 | The "end" forecast is shown as yes / no like the "start" forecast, although it missed its target on the test (precision 45% instead of 60%) | The author's call: the binary answer was the agreed format from the first message, and one output format for both tasks keeps the program simple. Nothing is re-tuned on the test. The test precision is reported next to the answer in the `--debug` panel |
+| 23 | The program keeps running and refreshes the screen (about once a minute live; in steps in replay) instead of printing once and exiting | The author's request after seeing the first version. This reverses the assumption behind decision 18 ("opened for a quick look, not left running"), under which the feature "minutes since the last Kyiv all-clear" was dropped. A running program could now track that moment itself. The feature is still not added: the models are frozen and the test period has been used, so a model with a new feature could no longer be evaluated honestly. Listed under "Possible extensions" |
 
 ## Data
 
@@ -506,6 +513,8 @@ Who corrected whom and what changed.
 | Test → both | On validation the "end" model looked like the clear success of the project (PR-AUC 76%, 88% of endings caught at 60% precision) | On the test it missed its target: precision 45% instead of 60%, Brier score worse than the simple duration curve. Reported as is; nothing was re-tuned after the test |
 | Test → Claude | Claude chose "from 2024-07" as the default mode and LightGBM as clearly the best model on the strength of validation | On the test the full-history mode was slightly ahead on "start", and the logistic regression came within 0.4–1.8 points of LightGBM. Both choices stay as frozen, with the weaker evidence stated |
 | Author → Claude | After the test Claude proposed showing only a probability for "end", without yes / no | The author kept yes / no, as decided at the start (decision 22) |
+| Author → Claude | Claude built a tile map of Ukraine placed by geography; it worked on the first prototype | The author did not like how it looked and replaced it with a plain wall of regions (decision 10) |
+| Author → author | "The program is not a monitor: the user opens it, looks and leaves" — the author's argument for dropping a feature (decision 18) | After seeing the program the author asked for it to keep running and refresh every minute (decision 23). Claude pointed out the contradiction; the feature stays out because the models are frozen and the test is spent |
 
 ## Stack
 
@@ -517,7 +526,10 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich
 2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features; 23 tests in total by now.
 3. ~~Baselines and metrics~~ — done, see "Baseline results".
 4. ~~Probabilistic algorithm and LightGBM, comparison~~ — done, see "Model results", "Tuning" and "Test results".
-5. ~~Ubilling client, `--replay` mode~~ — done, see "How to run"; plain-text output for now.
-6. Console interface: map, forecast, `--debug` panel.
+5. ~~Ubilling client, `--replay` mode~~ — done, see "How to run".
+6. ~~Console interface: regions, forecast, `--debug` panel~~ — done, see "How to run".
 
-Possible extension, only if time remains: use the alerts.in.ua history endpoint (last month only) for a rough quality check under the new yellow/red regime. The token would be read from an environment variable and never committed.
+Possible extensions:
+
+- Use the alerts.in.ua history endpoint (last month only) for a rough quality check under the new yellow/red regime. The token would be read from an environment variable and never committed.
+- Now that the program keeps running (decision 23), track the moment of the last Kyiv all-clear and add "minutes since the last all-clear" as a feature (1.6–1.9× the base rate in the first hour, see decision 18). This needs retraining and a fresh, unused test period.

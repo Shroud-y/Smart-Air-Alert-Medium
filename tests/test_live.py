@@ -60,3 +60,68 @@ def test_replay_forecast_equals_the_model_on_the_training_grid(when):
     expected = joblib.load(_file("lgbm", fc.task, "recent")).predict_proba(X)[0]
     assert fc.probability == pytest.approx(expected, abs=1e-12)
     assert fc.answer == (fc.probability >= fc.threshold)
+
+
+def test_wall_shows_every_region_once_and_colours_it_by_state():
+    from saam.ui import NAMES, WALL_ORDER, region_state, render_list, render_wall
+
+    snap = parse_ubilling(PAYLOAD, NOW)
+    assert len(WALL_ORDER) == len(set(WALL_ORDER)) == 26 and WALL_ORDER[0] == KYIV_CITY
+    text = render_wall(snap).renderables[0].plain
+    for region in WALL_ORDER:
+        assert text.count(f" {NAMES[region]} ") == 1
+
+    assert region_state("Київська область", snap) == "red"  # the most severe level among its districts
+    assert region_state("Чернігівська область", snap) == "yellow"
+    assert region_state("Львівська область", snap) == "quiet"
+    assert region_state("АР Крим", snap) == "nodata"
+    replay = from_history(load_alerts(), pd.Timestamp("2026-08-27 20:40", tz="UTC"))
+    assert region_state("Луганська область", replay) == "nodata"  # permanent alert is absent from the dataset
+    assert region_state("Харківська область", replay) == "alert"  # no levels in the dataset
+    assert "Kyiv oblast (red)" in render_list(snap).plain
+
+
+def _watch(argv, next_snapshot=None, max_ticks=3):
+    import argparse
+    import io
+
+    from rich.console import Console
+
+    import saam.__main__ as M
+
+    args = argparse.Namespace(replay=None, mode="recent", debug=False, list=False, interval=None, step=5)
+    for k, v in argv.items():
+        setattr(args, k, v)
+    console = Console(file=io.StringIO(), force_terminal=True, width=100, record=True)
+    slept = []
+    done = M.watch(args, next_snapshot or M.snapshot_source(args), console, sleep=slept.append, max_ticks=max_ticks)
+    return done, slept, console.export_text()
+
+
+@pytest.mark.skipif(not (MODEL_DIR / "thresholds.json").exists(), reason="models are not built; run scripts/final.py")
+def test_watch_in_replay_moves_forward_in_steps():
+    done, slept, text = _watch({"replay": "2026-08-27 23:40", "step": 10})
+    assert done == 3 and slept == [2, 2, 2]  # default replay interval
+    assert "2026-08-28 00:00 Kyiv time" in text  # 23:40 + 2 steps of 10 min
+
+
+@pytest.mark.skipif(not (MODEL_DIR / "thresholds.json").exists(), reason="models are not built; run scripts/final.py")
+def test_watch_keeps_the_last_screen_when_an_update_fails():
+    good = from_history(load_alerts(), pd.Timestamp("2026-08-27 20:40", tz="UTC"))
+    calls = iter([good, ConnectionError("down"), good])
+
+    def source():
+        item = next(calls)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    done, slept, text = _watch({}, source)
+    assert done == 2 and slept == [60, 60, 60]  # default live interval
+    assert "Forecast" in text
+
+
+@pytest.mark.skipif(not (MODEL_DIR / "thresholds.json").exists(), reason="models are not built; run scripts/final.py")
+def test_replay_stops_at_the_end_of_the_dataset():
+    done, _, text = _watch({"replay": "2026-09-07 08:20", "step": 5}, max_ticks=20)
+    assert done < 20 and "replay finished" in text

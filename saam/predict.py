@@ -1,6 +1,7 @@
 """Turns a Snapshot into the forecast shown to the user."""
 import json
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import joblib
@@ -49,6 +50,13 @@ def _file(kind, task, mode):
     return MODEL_DIR / f"{kind}_{task}_{MODES[mode].replace(' ', '_').replace('-', '_')}.joblib"
 
 
+@lru_cache(maxsize=None)
+def _load(task, mode):
+    """Model, frequency table and threshold; read once per run."""
+    thresholds = json.loads((MODEL_DIR / "thresholds.json").read_text(encoding="utf-8"))
+    return joblib.load(_file("lgbm", task, mode)), joblib.load(_file("table", task, mode)), thresholds[f"{task}/{MODES[mode]}"]
+
+
 def forecast(snapshot, mode=DEFAULT_MODE):
     """Forecast for the moment of the snapshot. Requires the models saved by
     scripts/final.py."""
@@ -58,9 +66,7 @@ def forecast(snapshot, mode=DEFAULT_MODE):
     kyiv_alert = KYIV_CITY in snapshot.regions_on()
     task = "end" if kyiv_alert else "start"
 
-    model = joblib.load(_file("lgbm", task, mode))
-    table = joblib.load(_file("table", task, mode))
-    threshold = json.loads((MODEL_DIR / "thresholds.json").read_text(encoding="utf-8"))[f"{task}/{MODES[mode]}"]
+    model, table, threshold = _load(task, mode)
     p = float(model.predict_proba(X)[0])
 
     cell = table._cells(X)[0]
