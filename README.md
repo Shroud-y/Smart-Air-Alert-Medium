@@ -10,6 +10,27 @@ Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities
 > Status: models trained and evaluated once on the test period. The "start" forecast held up; the "end" forecast did not meet its target — see "Test results". The console program is next.
 > This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
 
+## How to run
+
+```bash
+pip install -r requirements.txt
+```
+
+```bash
+python -m saam
+```
+
+```bash
+python -m saam --replay "2026-08-27 23:40" --debug
+```
+
+- Without options the current state comes from the ubilling API; no key is needed.
+- `--replay "YYYY-MM-DD HH:MM"` plays back a moment (Kyiv time) from the dataset, which ends on 2026-09-07. It works offline and is the fallback if the API is unavailable.
+- `--mode recent` (default) uses the model trained from 2024-07, `--mode full` the one trained on the full history.
+- `--debug` adds the probability, the threshold, the measured test quality, the matching cell of the frequency table and the model's main features.
+
+The trained models are in `models/`. To rebuild everything from the CSV: `python -X utf8 scripts/final.py`. Tests: `pytest`.
+
 ## Why Kyiv only
 
 The chance of an alert in Kyiv depends strongly on the state of neighbouring oblasts (Chernihiv, Kyiv oblast and others). That gives the model a strong signal and keeps the task feasible in two days. The hypothesis is supported by [arXiv 2411.14625](https://arxiv.org/html/2411.14625v1): the state of neighbouring oblasts is the most important group of features.
@@ -493,10 +514,10 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich
 ## Plan
 
 1. ~~EDA~~ — done, see "Exploratory analysis".
-2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features, 18 tests.
+2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features; 23 tests in total by now.
 3. ~~Baselines and metrics~~ — done, see "Baseline results".
 4. ~~Probabilistic algorithm and LightGBM, comparison~~ — done, see "Model results", "Tuning" and "Test results".
-5. Ubilling client, `--replay` mode.
+5. ~~Ubilling client, `--replay` mode~~ — done, see "How to run"; plain-text output for now.
 6. Console interface: map, forecast, `--debug` panel.
 
 Possible extension, only if time remains: use the alerts.in.ua history endpoint (last month only) for a rough quality check under the new yellow/red regime. The token would be read from an environment variable and never committed.
