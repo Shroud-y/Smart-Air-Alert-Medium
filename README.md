@@ -33,6 +33,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 13 | On top of the "at least one raion" flag, each oblast also gets: the number of raions under alert, minutes since its latest alert started, and separate flags for the raions of Kyiv oblast | EDA: the plain flag is saturated for frontline and northern oblasts (Chernihiv is under alert 60% of the time) and carries almost no signal there |
 | 14 | Training period is chosen by experiment: full history vs from 2024-07-01, compared on validation | EDA shows the regime changes in mid-2024; the author expects the recent period to work better but wants it confirmed, not assumed |
 | 15 | Validation is widened to January–June 2026; once all choices are fixed, the final model is retrained on train + validation and only then tested | 139 alert starts in the original validation are too few to compare variants reliably; retraining returns the freshest data to the final model. See "Time split" |
+| 16 | All regions stay in the feature set, including Kharkiv, Donetsk and Dnipropetrovsk whose flags carry no signal (lift 1.0). Features are revisited only if the final result is unsatisfactory | The author's call: nothing is removed pre-emptively on the basis of a single statistic. Known risk: with full-history training these flags can act as a hidden clock (Kharkiv was under alert 15% of the time in 2022 and 100% from mid-2024); the comparison in decision 14 will show whether it matters |
 
 ## Data
 
@@ -80,17 +81,19 @@ The 30-minute horizon is kept: it matches the typical lead.
 
 ### 2. Which regions count as neighbours?
 
-| Region | Share of time under alert | Precision | Recall |
-|---|---|---|---|
-| Kyiv oblast | 13% | 12.5% | 47% |
-| Cherkasy | 8% | 11.0% | 26% |
-| Zhytomyr | 5% | 8.7% | 13% |
-| Poltava | 28% | 6.0% | 48% |
-| Chernihiv | 60% | 4.7% | 81% |
-| Sumy | 76% | 3.9% | 83% |
-| Kharkiv, Donetsk, Dnipropetrovsk | 92–100% | ≈3.5% | 93–100% |
+| Region | Share of time under alert | Precision | Lift | Recall |
+|---|---|---|---|---|
+| Kyiv oblast | 13% | 12.5% | 3.6× | 47% |
+| Cherkasy | 8% | 11.0% | 3.1× | 26% |
+| Zhytomyr | 5% | 8.7% | 2.5× | 13% |
+| Poltava | 28% | 6.0% | 1.7× | 48% |
+| Chernihiv | 60% | 4.7% | 1.3× | 81% |
+| Sumy | 76% | 3.9% | 1.1× | 83% |
+| Kharkiv, Donetsk, Dnipropetrovsk | 92–100% | ≈3.5% | 1.0× | 93–100% |
 
-Recent period, Kyiv city quiet. Precision = P(city alert starts within 30 min | region under alert); recall = share of pre-alert minutes covered by the signal.
+Recent period, Kyiv city quiet. Precision = P(city alert starts within 30 min | region under alert); recall = share of pre-alert minutes covered by the signal. Lift = precision divided by the 3.5% base rate.
+
+Recall alone is misleading here: Kharkiv, Donetsk and Dnipropetrovsk reach 93–100% only because they are under alert almost all the time. Their lift of 1.0 means that knowing their state does not change the odds for Kyiv at all. They are kept as features anyway (decision 16).
 
 Chernihiv, the motivating example of this project, gives 4.7% against a 3.5% base rate as a plain yes/no flag, because it is under alert most of the time. Western oblasts (Chernivtsi 12%, Vinnytsia 10%) are precise but rare: they switch on only during nationwide alerts, recall 2–6%. This is the reason for decision 13.
 
@@ -231,6 +234,8 @@ Who corrected whom and what changed.
 | Author → author | The author leaned towards training only on data from mid-2024, where EDA shows the change | Not taken on faith: full history and mid-2024 are compared on validation (decision 14) |
 | Claude → Claude | Claude read the author's "from 2024" as January 2024 and proposed a third variant | The author meant mid-2024; two variants are compared, not three |
 | Claude → Claude | The split with a 3-month validation, proposed before the data was examined | Validation widened to 6 months with a final retraining (decision 15), after the author asked for the consequences of each option |
+| Author → Claude | The EDA table showed 93–100% recall for Kharkiv, Donetsk and Dnipropetrovsk without saying that it means nothing | The author spotted that these regions are simply always under alert; a lift column and an explanation were added |
+| Author → Claude | Claude proposed removing the three regions from the features because their lift is 1.0 | Rejected by the author: they stay, and features are changed only if the final result is unsatisfactory (decision 16) |
 
 ## Stack
 
