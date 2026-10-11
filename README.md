@@ -25,7 +25,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 5 | Alerts separated by a short pause are **not merged** | Merging would distort the data and the "start" target |
 | 6 | Exact duplicate rows are removed by the loading code; the raw CSV in git is not modified | Reproducibility, and the raw file can always be checked against the original |
 | 7 | Time: storage and all interval computations in **UTC**; hour of day and day of week in **Kyiv time** (`Europe/Kyiv`) | See "Time" |
-| 8 | Live alerts: [ubilling.net.ua/aerialalerts](https://ubilling.net.ua/aerialalerts/) in `?raw` mode | No token; returns raions, start time (UTC) and alert level. alerts.in.ua rejected: token by application, may not arrive in time |
+| 8 | Live alerts: [ubilling.net.ua/aerialalerts](https://ubilling.net.ua/aerialalerts/) in `?raw` mode | No token; returns raions, start time (UTC) and alert level. alerts.in.ua rejected: token by application, may not arrive in time. A token for alerts.in.ua was obtained later, but ubilling stays the default: a key cannot be committed, and the jury must be able to run the program without one |
 | 9 | `--replay <datetime>` mode: plays back history from the dataset | Fallback if the API is unavailable, and a way to demo the program on a real attack |
 | 10 | Interface: console, tile map of Ukraine (one cell per oblast), forecast below. No web app | A true ASCII outline is expensive and fragile. Rendering is one function; if tiles do not work out, it is replaced with a list of oblasts |
 | 11 | Dashboards: matplotlib figures in `reports/figures/`, embedded in this README; a `--debug` panel in the console | Needed for debugging and for describing the data analysis |
@@ -34,6 +34,8 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 14 | Training period is chosen by experiment: full history vs from 2024-07-01, compared on validation | EDA shows the regime changes in mid-2024; the author expects the recent period to work better but wants it confirmed, not assumed |
 | 15 | Validation is widened to January–June 2026; once all choices are fixed, the final model is retrained on train + validation and only then tested | 139 alert starts in the original validation are too few to compare variants reliably; retraining returns the freshest data to the final model. See "Time split" |
 | 16 | All regions stay in the feature set, including Kharkiv, Donetsk and Dnipropetrovsk whose flags carry no signal (lift 1.0). Features are revisited only if the final result is unsatisfactory | The author's call: nothing is removed pre-emptively on the basis of a single statistic. Known risk: with full-history training these flags can act as a hidden clock (Kharkiv was under alert 15% of the time in 2022 and 100% from mid-2024); the comparison in decision 14 will show whether it matters |
+| 17 | Features and metrics are computed on a 5-minute grid | Five times fewer near-identical rows than a 1-minute grid with the same base rates (2.99% for "start"); one constant in `saam/config.py` |
+| 18 | Features use only a snapshot of the current state: which alerts are active and when they started. Nothing about alerts that have already ended | The live API reports only active alerts, and the program is opened for a quick look, not left running, so it cannot remember earlier events itself. "Minutes since the last Kyiv all-clear" was dropped for this reason, although it carries a moderate signal (1.6–1.9× the base rate in the first hour) |
 
 ## Data
 
@@ -236,6 +238,8 @@ Who corrected whom and what changed.
 | Claude → Claude | The split with a 3-month validation, proposed before the data was examined | Validation widened to 6 months with a final retraining (decision 15), after the author asked for the consequences of each option |
 | Author → Claude | The EDA table showed 93–100% recall for Kharkiv, Donetsk and Dnipropetrovsk without saying that it means nothing | The author spotted that these regions are simply always under alert; a lift column and an explanation were added |
 | Author → Claude | Claude proposed removing the three regions from the features because their lift is 1.0 | Rejected by the author: they stay, and features are changed only if the final result is unsatisfactory (decision 16) |
+| Claude → Claude | Assumed ubilling would report when the last Kyiv alert ended | Checked once Kyiv was quiet: no mode and no source returns it |
+| Author → Claude | Claude proposed keeping the "minutes since the last all-clear" feature by having the program remember the all-clear moment while it runs | The author pointed out that the program is not a long-running monitor: the user opens it, looks and leaves. The feature was removed (decision 18) |
 
 ## Stack
 
@@ -249,3 +253,5 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich
 4. Probabilistic algorithm and LightGBM, comparison.
 5. Ubilling client, `--replay` mode.
 6. Console interface: map, forecast, `--debug` panel.
+
+Possible extension, only if time remains: use the alerts.in.ua history endpoint (last month only) for a rough quality check under the new yellow/red regime. The token would be read from an environment variable and never committed.
