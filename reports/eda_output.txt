@@ -1,0 +1,156 @@
+== 6. Data quality (all regions, after dropping duplicates)
+  rows 185428, regions 25, Kyiv alerts 2267
+  duration <= 0: 0, < 1 min: 451, > 24 h: 897, max 14497.3 h
+    longest: Kharkiv / hromada / 2024-05-12 / 14497 h
+    longest: Kharkiv / hromada / 2024-05-20 / 10525 h
+    longest: Donetsk / hromada / 2026-07-26 / 806 h
+  overlapping intervals within the same oblast/raion/hromada: 0
+  Luhansk rows: 1 (permanent alert is not in the data; region excluded)
+
+== 5. How rare is the event (1-min grid, H = 30 min)
+  grid 2022-03-15 16:11 .. 2026-09-07 05:08 UTC, 2356618 points
+  Kyiv under alert: 6.7% of the time
+  'start' base rate (quiet minutes followed by a start within H): 2.99%
+  'end' base rate (alert minutes followed by an end within H):    37.33%
+  year  under_alert  start_rate  end_rate
+  2022        7.7%      3.70%     42.5%
+  2023        4.6%      1.77%     34.1%
+  2024        6.2%      2.96%     39.8%
+  2025        8.5%      3.13%     29.7%
+  2026        6.8%      3.84%     44.2%
+  train      Kyiv starts  1957, start_rate 2.86%, end_rate 36.4%
+  validation Kyiv starts   139, start_rate 3.25%, end_rate 51.7%
+  test       Kyiv starts   171, start_rate 5.47%, end_rate 41.3%
+
+== 1-2. Other regions as a signal for a Kyiv start
+  share_time: share of quiet-Kyiv minutes when the region is under alert
+  precision : P(Kyiv start within H | region under alert, Kyiv quiet)
+  recall    : share of positive minutes covered by 'region under alert'
+  base rate: all 2.99%, recent (from 2025-07-01) 3.50%
+                 share_time_all  precision_all  recall_all  share_time_recent  precision_recent  recall_recent
+region                                                                                                        
+Kyiv oblast                 7.2           13.5        32.5               13.3              12.5           47.4
+Chernivtsi                  0.5           10.9         2.0                0.5              12.0            1.6
+Cherkasy                    7.2           10.6        25.6                8.2              11.0           25.6
+Vinnytsia                   2.5            9.7         8.2                2.0              10.4            5.8
+Khmelnytskyi                1.7            8.2         4.7                1.2              10.0            3.3
+Zhytomyr                    3.3            9.6        10.6                5.4               8.7           13.4
+Ternopil                    0.7            8.6         1.9                0.5               7.5            1.1
+Kirovohrad                  9.4            7.6        24.0               12.1               7.3           25.3
+Rivne                       1.2            7.4         2.9                2.1               6.8            4.2
+Poltava                    16.9            7.4        41.8               28.0               6.0           48.4
+Ivano-Frankivsk             0.4            8.2         1.0                0.4               5.7            0.6
+Mykolaiv                   12.9            6.0        25.9               17.7               5.7           28.8
+Kherson                    13.1            5.0        22.1               22.4               4.9           31.3
+Chernihiv                  22.1            6.2        46.1               60.4               4.7           81.3
+Lviv                        0.4            7.0         0.9                0.4               4.6            0.6
+Odesa                       7.7            6.2        15.8               15.4               4.5           20.0
+Volyn                       0.5            6.9         1.2                0.9               4.1            1.1
+Zaporizhzhia               30.2            4.5        45.1               61.1               4.0           69.9
+Sumy                       36.0            4.6        55.6               75.5               3.9           83.4
+Donetsk                    53.0            3.6        64.2               92.3               3.6           93.9
+Kharkiv                    57.0            3.7        69.7               92.0               3.6           93.4
+Dnipropetrovsk             74.9            3.1        78.8               99.8               3.5          100.0
+Zakarpattia                 0.5            3.4         0.5                1.4               1.3            0.5
+
+  Lead time: at each Kyiv start, how long the region had already been under alert
+  -- all: share of Kyiv starts (%), top 10 by lead>=10
+                active_at_start  lead>=10  lead>=30  median_lead_min
+region                                                              
+Dnipropetrovsk             83.0      78.3      73.9           3381.8
+Kharkiv                    73.4      68.3      61.0          71271.7
+Donetsk                    66.7      62.5      55.3            205.0
+Sumy                       60.3      53.9      47.6            146.9
+Chernihiv                  51.2      45.3      42.1            138.7
+Zaporizhzhia               54.2      43.3      34.1             57.7
+Poltava                    50.7      40.5      32.1             59.2
+Kyiv oblast                43.4      34.3      25.6             41.8
+Mykolaiv                   32.1      25.7      16.6             32.5
+Cherkasy                   37.1      25.2      19.5             35.0
+  -- recent: share of Kyiv starts (%), top 10 by lead>=10
+                active_at_start  lead>=10  lead>=30  median_lead_min
+region                                                              
+Dnipropetrovsk             99.9      99.9      99.9          20566.6
+Donetsk                    94.0      93.0      91.4            877.0
+Kharkiv                    94.7      91.0      86.7            494.0
+Chernihiv                  83.3      79.6      75.7            205.6
+Sumy                       83.9      78.3      74.5            209.6
+Zaporizhzhia               75.3      66.3      61.3            156.8
+Kyiv oblast                62.6      51.2      35.4             35.7
+Poltava                    53.8      44.5      39.4             75.5
+Kherson                    33.0      28.2      22.4             50.8
+Mykolaiv                   32.1      26.7      19.8             42.0
+  Kyiv starts with no other region under alert (all): 5.4%; median regions under alert 7
+  Kyiv starts with no other region under alert (recent): 0.0%; median regions under alert 8
+  [figure] reports/figures/neighbour_signal.png
+  [figure] reports/figures/lead_time.png
+
+== 3. Effect of the move to raion-level alerts
+  rows per quarter by level:
+level   hromada  oblast  raion
+q                             
+2022Q1      406     996    254
+2022Q2     1152    4893    546
+2022Q3      998    4285     79
+2022Q4      420    3459      5
+2023Q1      229    3421      3
+2023Q2      216    3495      4
+2023Q3      226    4815      5
+2023Q4      436    4512      0
+2024Q1     1168    5387      1
+2024Q2     1478    5993      0
+2024Q3      995    5606      0
+2024Q4      855    4649      3
+2025Q1     1039    4549    409
+2025Q2     1872    4315    750
+2025Q3     1896    3588   6501
+2025Q4     2093     903  18060
+2026Q1     2044     138  23955
+2026Q2     2000     139  26541
+2026Q3     1289     171  22186
+  [figure] reports/figures/alert_share_heatmap.png
+  share of time under alert by half-year, % (selected regions):
+        Kyiv oblast  Chernihiv  Zhytomyr  Cherkasy  Poltava  Sumy  Kharkiv  Kyiv city
+2022H1         12.3       15.3      11.6      11.5     13.8  11.1     26.1       12.1
+2022H2          5.4        4.7       4.4       7.0      8.4   6.8     15.2        5.1
+2023H1          5.8        7.4       4.4       5.6     10.5  10.3     13.4        5.4
+2023H2          5.3        5.8       3.9       7.1      9.3  10.6     16.5        3.8
+2024H1          5.6        6.2       4.5       8.5     14.4  14.4     49.4        3.8
+2024H2         22.6       27.5      13.1      21.7     32.8  56.0    100.0        8.5
+2025H1         21.0       27.8      11.3      21.5     31.5  64.7    100.0        9.5
+2025H2         17.4       55.4       8.5      13.3     28.9  69.3    100.0        7.4
+2026H1         18.9       67.5      11.1      11.9     32.0  79.2     84.1        5.6
+2026H2         25.6       70.6       5.8      13.9     38.2  88.9     93.3        9.8
+  'Kyiv oblast under alert' as a signal, by half-year:
+  half    share_time  precision  recall
+  2022H1       1.8%      19.2%    5.4%
+  2022H2       0.5%      10.9%    2.5%
+  2023H1       0.5%      21.5%    6.4%
+  2023H2       1.6%      17.0%   15.5%
+  2024H1       2.0%      11.9%   11.1%
+  2024H2      15.4%      14.0%   57.2%
+  2025H1      12.8%      14.4%   57.0%
+  2025H2      10.8%      12.4%   44.3%
+  2026H1      14.1%      11.4%   49.3%
+  2026H2      17.7%      15.1%   49.2%
+
+== 4. Drift of Kyiv alerts across years
+      alerts  median_min  mean_min  p90_min
+year                                       
+2022     505        49.0      64.0    132.0
+2023     301        55.0      79.0    172.0
+2024     502        34.0      65.0    151.0
+2025     511        35.0      87.0    246.0
+2026     448        30.0      54.0    122.0
+  [figure] reports/figures/kyiv_alerts_per_month.png
+  [figure] reports/figures/kyiv_start_hour_by_year.png
+  share of alert starts at night (22:00-05:59 Kyiv time), by year:
+year
+2022    30.5
+2023    36.5
+2024    41.8
+2025    47.9
+2026    38.6
+  P(end within 30 min | elapsed) 2022–2024: 0m 33%, 30m 44%, 60m 34%, 120m 36%, 180m 32%
+  P(end within 30 min | elapsed) 2025–2026: 0m 46%, 30m 46%, 60m 31%, 120m 22%, 180m 21%
+  [figure] reports/figures/kyiv_end_curve.png

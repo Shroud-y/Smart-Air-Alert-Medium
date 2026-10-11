@@ -7,7 +7,7 @@ A contest MVP: a console program that shows a map of current air raid alerts in 
 
 Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities and technical details live in dashboards.
 
-> Status: plan and stack agreed, data verified. No model code yet.
+> Status: plan and stack agreed, data verified, exploratory analysis done. No model code yet.
 > This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
 
 ## Why Kyiv only
@@ -30,6 +30,9 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 10 | Interface: console, tile map of Ukraine (one cell per oblast), forecast below. No web app | A true ASCII outline is expensive and fragile. Rendering is one function; if tiles do not work out, it is replaced with a list of oblasts |
 | 11 | Dashboards: matplotlib figures in `reports/figures/`, embedded in this README; a `--debug` panel in the console | Needed for debugging and for describing the data analysis |
 | 12 | Tests with pytest | The main risk is leaking the future into features; it gives falsely good metrics and is invisible to the eye |
+| 13 | On top of the "at least one raion" flag, each oblast also gets: the number of raions under alert, minutes since its latest alert started, and separate flags for the raions of Kyiv oblast | EDA: the plain flag is saturated for frontline and northern oblasts (Chernihiv is under alert 60% of the time) and carries almost no signal there |
+| 14 | Training period is chosen by experiment: full history vs from 2024-07-01, compared on validation | EDA shows the regime changes in mid-2024; the author expects the recent period to work better but wants it confirmed, not assumed |
+| 15 | Validation is widened to January–June 2026; once all choices are fixed, the final model is retrained on train + validation and only then tested | 139 alert starts in the original validation are too few to compare variants reliably; retraining returns the freshest data to the final model. See "Time split" |
 
 ## Data
 
@@ -59,6 +62,86 @@ python -X utf8 -c "import csv;r=list(csv.reader(open('official_data_uk.csv',enco
 | **Total** | 4,141 | **2,267** | |
 
 Duration: median 38 min, 95th percentile 231 min, maximum 673 min. No overlapping intervals. 10 alerts are shorter than 2 min; 29 pairs of alerts are less than 5 min apart (not merged, decision 5).
+
+## Exploratory analysis
+
+Done on a 1-minute grid (2.36M points, 2022-03-15 … 2026-09-07) with [scripts/eda.py](scripts/eda.py); the full numeric output is in [reports/eda_output.txt](reports/eda_output.txt). "Recent" below means from 2025-07-01. The analysis was run to answer six questions that the plan depended on.
+
+### 1. Do neighbours predict Kyiv, and how early?
+
+Yes. The strongest signal is Kyiv oblast: when it is under alert and the city is not, a city alert starts within 30 min in 12.5% of cases against a 3.5% base rate (recent).
+
+- In 63% of city alert starts Kyiv oblast was already under alert; in 51% for at least 10 min, in 35% for at least 30 min; the median is 36 min.
+- 37% of city alerts start with no alert in Kyiv oblast — these cannot be caught from neighbours.
+
+The 30-minute horizon is kept: it matches the typical lead.
+
+![Lead time](reports/figures/lead_time.png)
+
+### 2. Which regions count as neighbours?
+
+| Region | Share of time under alert | Precision | Recall |
+|---|---|---|---|
+| Kyiv oblast | 13% | 12.5% | 47% |
+| Cherkasy | 8% | 11.0% | 26% |
+| Zhytomyr | 5% | 8.7% | 13% |
+| Poltava | 28% | 6.0% | 48% |
+| Chernihiv | 60% | 4.7% | 81% |
+| Sumy | 76% | 3.9% | 83% |
+| Kharkiv, Donetsk, Dnipropetrovsk | 92–100% | ≈3.5% | 93–100% |
+
+Recent period, Kyiv city quiet. Precision = P(city alert starts within 30 min | region under alert); recall = share of pre-alert minutes covered by the signal.
+
+Chernihiv, the motivating example of this project, gives 4.7% against a 3.5% base rate as a plain yes/no flag, because it is under alert most of the time. Western oblasts (Chernivtsi 12%, Vinnytsia 10%) are precise but rare: they switch on only during nationwide alerts, recall 2–6%. This is the reason for decision 13.
+
+![Neighbour signal](reports/figures/neighbour_signal.png)
+
+### 3. Did the move to raion-level alerts break the oblast flag?
+
+Partly.
+
+- Kyiv oblast: the share of time under alert jumped from 5.6% to 22.6% in the second half of 2024, while all its rows were still oblast-level. This is a real increase in attacks, not an aggregation effect. After the move to raions (2025) it stays at 17–26%.
+- Chernihiv: here the effect is real — 28% → 55% → 68% right after the move.
+- Kharkiv: 100% of the time from mid-2024 because of a single hromada-level alert that lasted 604 days.
+
+![Share of time under alert](reports/figures/alert_share_heatmap.png)
+
+### 4. Is it worth training on 2022–2023?
+
+The data drifts:
+
+- 2023 is the quietest year (301 alerts, 4.6% of the time under alert).
+- Median duration falls: 49 → 55 → 34 → 35 → 30 min (2022 → 2026).
+- Share of alerts starting at night (22:00–06:00 Kyiv time): 31% in 2022, 48% in 2025, 39% in 2026.
+- After 2 hours of alert the chance to end within 30 min was 36% in 2022–2024 and 22% in 2025–2026.
+
+Analysis alone cannot settle this, hence decision 14.
+
+![Kyiv alerts per month](reports/figures/kyiv_alerts_per_month.png)
+![Start hour by year](reports/figures/kyiv_start_hour_by_year.png)
+![End curve](reports/figures/kyiv_end_curve.png)
+
+### 5. How rare is the event?
+
+- "Start" task: 3.0% of quiet minutes are followed by an alert within 30 min. This is the PR-AUC of random guessing.
+- "End" task: 37% of alert minutes are followed by an end within 30 min.
+
+With the split planned before EDA:
+
+| Part | Kyiv alert starts | "Start" base rate |
+|---|---|---|
+| Train (to March 2026) | 1,957 | 2.9% |
+| Validation (April–June 2026) | 139 | 3.3% |
+| Test (July – 6 September 2026) | 171 | 5.5% |
+
+The test period is about twice as intense as training: August 2026 had 90 alerts, the most since March 2022. Validation is small, so a threshold picked on 139 events would be noisy — this led to decision 15.
+
+### 6. Data quality across all regions
+
+- 2 rows with zero duration (Odesa and Kharkiv oblasts, November 2025) — dropped by the loader, 185,428 rows remain.
+- 451 rows shorter than 1 min; 897 longer than 24 h, almost all in Donetsk and Dnipropetrovsk oblasts.
+- Overlapping intervals within the same raion or hromada: 0.
+- Luhansk: 1 row; its permanent alert is not in the data, so the region is excluded.
 
 ## Time
 
@@ -98,19 +181,34 @@ For the "end" task: the empirical duration curve — P(end within `H` min | aler
 
 **Time split** (no shuffling, gap ≥ `H` between parts)
 
-| Part | Period |
-|---|---|
-| Train | 2022-03-15 … 2026-03-31 |
-| Validation | 2026-04-01 … 2026-06-30 |
-| Test | 2026-07-01 … 2026-09-06 |
+| Part | Period | Kyiv alert starts |
+|---|---|---|
+| Train | 2022-03-15 or 2024-07-01 (decision 14) … 2025-12-31 | 1,819 or 825 |
+| Validation | 2026-01-01 … 2026-06-30 | 277 |
+| Final training (train + validation) | … 2026-06-30 | 2,096 or 1,102 |
+| Test | 2026-07-01 … 2026-09-06 | 171 |
 
-The dates may be adjusted after EDA (old years may hurt because attack patterns changed); any change will be recorded here.
+The split was changed after EDA. Options considered:
+
+| Option | Idea | Verdict |
+|---|---|---|
+| 1 | Keep validation at April–June 2026 | Every choice rests on 139 events; a rough error of ±8 percentage points on recall makes the comparison of training periods unreliable |
+| 2 | Widen validation to January–June 2026 | 277 events and both winter and summer in validation, but training loses the 138 freshest alert starts and a third of the raion-level data |
+| **3** | Option 2, then retrain the final model on train + validation | **chosen**: reliable choices and the freshest data in the final model |
+| 4 | Rolling validation over several periods | Most reliable, too much code and time for a two-day MVP |
+
+Procedure: thresholds, hyperparameters, feature set and the training period are chosen on validation. They are then frozen, the model is retrained on train + validation with the same settings, and the test set is opened once.
+
+Cost of option 3: the threshold is picked for a model trained on less data and may be slightly off after retraining; this cannot be checked on anything but the test set.
+
+The test period is not moved even though it is unusually intense: choosing it to get a better number would be dishonest.
 
 ## Known limitations
 
 - **Data gap.** History ends on 2026-09-07; there is more than a month without data between training and live use.
 - **Yellow and red alerts.** Since September 2026 alerts carry levels (yellow — drones, red — missiles); ubilling returns them. The model is trained on data without levels, so the live forecast is outside the training distribution and there is nothing to measure its quality on under the new regime. The introduction date (6 September) comes from a third-party project, not an official source.
-- **Change of granularity.** After the move to raion-level alerts (2025) the "oblast under alert" feature may fire more often than before. To be checked in EDA.
+- **Change of granularity.** Raion-level data barely exists before mid-2025, so raion-based features (decision 13) are degenerate in older years. For Chernihiv the oblast flag fires about twice as often after the move to raions.
+- **Not all alerts are predictable from neighbours.** 37% of city alerts start with no alert in Kyiv oblast.
 - **The live source is volunteer-run.** Ubilling proxies third-party sources that do not always agree with each other; not for safety decisions.
 
 ## Corrections log
@@ -128,6 +226,11 @@ Who corrected whom and what changed.
 | Author, verified by Claude | Suspicion: time in the dataset is UTC and summer time will cause a problem | Confirmed; option A chosen |
 | Claude → Claude | Argument against option B: alerts spanning a switch would get a wrong duration | No Kyiv alert spans a switch; only the code-complexity argument remains |
 | Author → Claude | Claude wrote the README in Ukrainian | The whole project is in English |
+| Claude → Claude | Expected the move to raion-level alerts in 2025 to inflate the oblast flag everywhere | For Kyiv oblast the jump happened in 2024 on oblast-level rows and is real; the inflation is confirmed only for Chernihiv |
+| Data → both | Chernihiv was the motivating example of a predictive neighbour; Claude listed the adjacent oblasts from memory | As a yes/no flag Chernihiv is barely above the base rate; Kyiv oblast, Cherkasy and Zhytomyr are the informative ones. Extra features added (decision 13) |
+| Author → author | The author leaned towards training only on data from mid-2024, where EDA shows the change | Not taken on faith: full history and mid-2024 are compared on validation (decision 14) |
+| Claude → Claude | Claude read the author's "from 2024" as January 2024 and proposed a third variant | The author meant mid-2024; two variants are compared, not three |
+| Claude → Claude | The split with a 3-month validation, proposed before the data was examined | Validation widened to 6 months with a final retraining (decision 15), after the author asked for the consequences of each option |
 
 ## Stack
 
@@ -135,7 +238,7 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich
 
 ## Plan
 
-1. EDA: oblast states over time, the link between neighbours and Kyiv, the effect of the move to raion-level alerts → figures in `reports/figures/`.
+1. ~~EDA~~ — done, see "Exploratory analysis".
 2. Data loading and cleaning, time grid, features, target + leak tests.
 3. Baselines and metrics.
 4. Probabilistic algorithm and LightGBM, comparison.
