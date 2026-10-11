@@ -5,7 +5,7 @@ A contest MVP: a console program that shows where air raid alerts are active in 
 - if there is no alert — **whether one will start** within the next `H` minutes;
 - if an alert is active — **whether it will end** within the next `H` minutes.
 
-Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities and technical details live in dashboards.
+Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities and technical details live in the `--debug` panel and in the figures of this README.
 
 > Status: all six steps of the plan are done. The console program runs live and in replay. On the test period the "start" forecast held up; the "end" forecast did not meet its target — see "Test results".
 > This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
@@ -24,7 +24,8 @@ A console program that shows where air raid alerts are active in Ukraine and ans
 Corrections by the author that changed the result (the full list is in the [Corrections log](#corrections-log)):
 - raised, unprompted, that the dataset is in UTC while Ukraine switches between UTC+2 and UTC+3, so the same UTC hour is a different hour for people; this led to the time handling of decision 7;
 - caught that the official data file had stopped updating, which Claude had reported as updated daily;
-- noticed that the 93–100% recall of frontline regions meant only "always under alert", not a signal.
+- noticed that the 93–100% recall of frontline regions meant only "always under alert", not a signal;
+- stopped Claude when it proposed a design that silently assumed a long-running monitor: a session lasts about half an hour at most, so a feature that needed the program to remember past events was dropped as wasted effort (decision 18).
 
 ## How to run
 
@@ -73,7 +74,7 @@ Checked the way a reviewer would run it: a fresh clone into an empty folder, a n
 
 ## Why Kyiv only
 
-The chance of an alert in Kyiv depends strongly on the state of neighbouring oblasts (Chernihiv, Kyiv oblast and others). That gives the model a strong signal and keeps the task feasible in two days. The hypothesis is supported by [arXiv 2411.14625](https://arxiv.org/html/2411.14625v1): the state of neighbouring oblasts is the most important group of features.
+The chance of an alert in Kyiv depends strongly on the state of neighbouring oblasts (Chernihiv, Kyiv oblast and others). That gives the model a strong signal and keeps the task feasible in two days. The hypothesis is supported by [arXiv 2411.14625](https://arxiv.org/html/2411.14625v1): the state of neighbouring oblasts is the most important group of features. Our own analysis refines it: Kyiv oblast is the strong signal, Chernihiv on its own is a weak one (see "Exploratory analysis", question 2).
 
 ## Key decisions
 
@@ -85,7 +86,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 4 | Aggregation to oblast: an oblast is under alert if **at least one** of its raions or hromadas is | The data mixes levels (oblast / raion / hromada), raion-level dominates from 2025. The rule gives one representation for all years |
 | 5 | Alerts separated by a short pause are **not merged** | Merging would distort the data and the "start" target |
 | 6 | Exact duplicate rows are removed by the loading code; the raw CSV in git is not modified | Reproducibility, and the raw file can always be checked against the original |
-| 7 | Time: storage and all interval computations in **UTC**; hour of day and day of week in **Kyiv time** (`Europe/Kyiv`) | See "Time" |
+| 7 | Time: storage and all interval computations in **UTC**; hour of day and day of week in **Kyiv time** (`Europe/Kyiv`). Only the Kyiv hour is used as a feature | See "Time". Claude suggested also giving the model the Moscow hour (UTC+3 all year, no clock change), in case attacks are planned by Moscow time; the author chose the Kyiv hour alone |
 | 8 | Live alerts: [ubilling.net.ua/aerialalerts](https://ubilling.net.ua/aerialalerts/) in `?raw` mode | No token; returns raions, start time (UTC) and alert level. alerts.in.ua rejected: token by application, may not arrive in time. A token for alerts.in.ua was obtained later, but ubilling stays the default: a key cannot be committed, and the jury must be able to run the program without one |
 | 9 | `--replay <datetime>` mode: plays back history from the dataset | Fallback if the API is unavailable, and a way to demo the program on a real attack |
 | 10 | Interface: console; all regions as a wall of equal coloured bricks, forecast below. No web app | A true ASCII outline of Ukraine was judged expensive and fragile from the start. A tile map placed by geography was built as a prototype and worked, but the author did not like how it looked and replaced it with a plain wall. Rendering is one function, so the swap touched nothing else |
@@ -94,14 +95,15 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 13 | On top of the "at least one raion" flag, each oblast also gets: the number of raions under alert, minutes since its latest alert started, and separate flags for the raions of Kyiv oblast | EDA: the plain flag is saturated for frontline and northern oblasts (Chernihiv is under alert 60% of the time) and carries almost no signal there |
 | 14 | Both training periods are kept and offered as modes of the program: "full history" and "from 2024-07-01". The default is "from 2024-07-01" | Validation does not settle the choice: for "end" the recent period is better (75.1% against 72.2%), for "start" the two are within noise (12.5% against 12.8%). The author expected the recent period to win but did not trust a choice made on such a margin. The default is the recent one because it is better on "end", equal on "start" and carries no hidden-clock risk. Both modes are reported on the test set; the default is fixed here, before the test is opened |
 | 15 | Validation is widened to January–June 2026; once all choices are fixed, the final model is retrained on train + validation and only then tested | 139 alert starts in the original validation are too few to compare variants reliably; retraining returns the freshest data to the final model. See "Time split" |
-| 16 | No region is removed from the feature set by hand, including Kharkiv, Donetsk and Dnipropetrovsk whose flags carry no signal (lift 1.0). The only filter is technical: a feature that takes a single value in the training period is not given to the model. Features are otherwise revisited only if the final result is unsatisfactory | The author's call: nothing is removed on the basis of one statistic about how useful a region looks. The technical filter was added after the baselines: Kharkiv is under alert 100% of the training time from mid-2024, the logistic regression put half of its intercept on that flag and broke once the flag started to vary. Such a feature cannot be learned from at all, whatever the region. Known risk that remains: with full-history training these flags can act as a hidden clock (Kharkiv was under alert 15% of the time in 2022); the comparison in decision 14 will show whether it matters |
+| 16 | No region is removed from the feature set by hand, including Kharkiv, Donetsk and Dnipropetrovsk whose flags carry no signal (lift 1.0). The only filter is technical: a feature that takes a single value in the training period is not given to the model. Features are otherwise revisited only if the final result is unsatisfactory | The author's call: nothing is removed on the basis of one statistic about how useful a region looks. The technical filter was added after the baselines: Kharkiv is under alert 100% of the training time from mid-2024, the logistic regression put half of its intercept on that flag and broke once the flag started to vary. Such a feature cannot be learned from at all, whatever the region. Known risk that remains: with full-history training these flags can act as a hidden clock (Kharkiv was under alert 15% of the time in 2022). On the test the two training periods could not be told apart (see "Uncertainty of the test results"), so this risk did not show up as a measurable loss |
 | 17 | Features and metrics are computed on a 5-minute grid | Five times fewer near-identical rows than a 1-minute grid with the same base rates (2.99% for "start"); one constant in `saam/config.py` |
-| 18 | Features use only a snapshot of the current state: which alerts are active and when they started. Nothing about alerts that have already ended | The live API reports only active alerts, and the program was then meant to be opened for a quick look, not left running, so it could not remember earlier events itself (this assumption was later reversed, see decision 23). "Minutes since the last Kyiv all-clear" was dropped for this reason, although it carries a moderate signal (1.6–1.9× the base rate in the first hour) |
+| 18 | Features use only a snapshot of the current state: which alerts are active and when they started. Nothing about alerts that have already ended | The live API reports only active alerts. One candidate feature needed more: "minutes since the last Kyiv all-clear" (1.6–1.9× the base rate in the first hour after an all-clear). The API does not return that moment, so Claude proposed that the program remember it while running — and with that quietly assumed a long-running monitor, which had never been agreed. The author stopped it: nobody is expected to keep the program open for more than about half an hour at a stretch, so the program would rarely have seen the all-clear it needs, and building state tracking for one moderate feature would be wasted effort. The feature was dropped. This was the author's decision, not Claude's |
 | 19 | "Minutes since an alert started" features of regions and raions are capped at 180 ("long ago"). The duration of the Kyiv city alert itself is not capped | Found on the first LightGBM run: for a region with a months-long alert the uncapped value is a day counter (one hromada alert in Kharkiv oblast lasted 604 days), and the model learned the calendar date from it. See "Model results" |
 | 20 | The probabilistic algorithm is a table of conditional frequencies over three factors, smoothed towards the overall rate. "Start": state of Kyiv oblast (quiet / alert < 15 / 15–60 / > 60 min) × number of adjacent oblasts under alert (0, 1, 2, 3+) × time of day (4 parts), 64 cells. "End": how long the Kyiv alert has lasted (5 bands) × Kyiv oblast quiet or not × time of day | Every forecast can be read as a sentence ("night, oblast under alert for 20 min, three neighbours — 23%"), which suits the `--debug` panel. Naive Bayes over all flags was rejected: it assumes independent regions, and they are strongly linked |
 | 21 | The yes / no answer is cautious by design, and the caution points in opposite directions for the two tasks. "Start": the threshold must catch at least **40%** of pre-alert moments (recall). "End": a "yes, it will end" must be right at least **60%** of the time (precision) | The author's deliberate choice: an extra warning is better than a missed alert, and a perfect result is not expected from a learning project. For "end" the dangerous mistake is the opposite one — promising an all-clear that does not come. The numbers were chosen from a measured trade-off, see "Operating point"; Claude had proposed 50% and 70% |
 | 22 | The "end" forecast is shown as yes / no like the "start" forecast, although it missed its target on the test (precision 45% instead of 60%). Its measured precision is printed under the answer every time, in every output mode | The author's call: the binary answer was the agreed format from the first message, and one output format for both tasks keeps the program simple. Nothing is re-tuned on the test. At first the test precision was visible only with `--debug`; the author moved it under the answer, so that a user who never opens the debug panel still sees that this "yes" is a weak hint. This changes what is displayed, not the model, so the frozen protocol is intact |
-| 23 | The program keeps running and refreshes the screen (about once a minute live; in steps in replay) instead of printing once and exiting | The author's request after seeing the first version. This reverses the assumption behind decision 18 ("opened for a quick look, not left running"), under which the feature "minutes since the last Kyiv all-clear" was dropped. The reason we anyway dropped this feature is because it's useless and cause overengeeniring. That's was my clear decsision as an author, not claude |
+| 23 | The program keeps running and refreshes the screen (about once a minute live; in steps in replay) instead of printing once and exiting | The author's request after seeing the first version: within a session the user should not have to start the program again to see fresh data. This does not turn the program into a monitor and does not conflict with decision 18: sessions are still short (nobody is expected to keep the program open for more than about half an hour at a stretch), so the argument against the dropped feature holds exactly as before |
+| 24 | The trained models and thresholds are committed to the repository (`models/`, about 2 MB) | The author's call: the jury must be able to run the program right after cloning, without training anything. Library versions are pinned in `requirements.txt` because saved models are tied to them |
 
 ## Data
 
@@ -233,6 +235,8 @@ How A works: the time grid, region states, durations, lags and the target are co
 
 No Kyiv alert in the dataset spans a switch moment (checked on all 9 switches); other oblasts were not checked.
 
+Which clock to use for the hour of day was a separate choice. Russia does not change its clocks (Moscow is UTC+3 all year), so if attacks are planned by Moscow time, the Kyiv hour is off by one in winter. The small sample above points to Kyiv time. Claude suggested giving the model both hours and letting validation decide; the author chose the Kyiv hour alone, and the Moscow hour was never tried.
+
 ## Evaluation
 
 **Metrics**
@@ -343,9 +347,9 @@ First versions, validation period, same conditions as the baselines; produced by
 
 What this shows:
 
-- **"Start" is hard for every method.** LightGBM is the best, but its lead over the best baseline is modest: PR-AUC 12.5–12.8% against 11.3%, F1 24% against 22%.
+- **"Start" is hard for every method.** On validation LightGBM is the best, but its lead over the best baseline is modest: PR-AUC 12.5–12.8% against 11.3%, F1 24% against 22%.
 - **The frequency table does not beat the best baseline on "start"** (10.0% against 11.3%): three factors are too few. It catches more alerts (recall 42–43%) at lower precision. On "end" it is ahead of the duration curve but far behind LightGBM.
-- **"End" is where LightGBM clearly wins**: PR-AUC 75% against 61%.
+- **"End" is where LightGBM clearly wins on validation**: PR-AUC 75% against 61%. The test did not confirm this, see "Test results".
 - **Training period (decision 14):** for "end" the recent period is better (75.1% against 72.2%); for "start" the two are within noise of each other (12.5% against 12.8%). Both are kept as modes of the program.
 
 What the models look at (LightGBM, share of total gain):
@@ -458,7 +462,7 @@ Everything that affects the test result was fixed, and committed, before the tes
 
 ### Test results
 
-One pass over 1 July – 6 September 2026 with the frozen protocol; produced by [scripts/final.py](scripts/final.py), full output in [reports/final_output.txt](reports/final_output.txt). 171 Kyiv alerts in the period. Nothing was changed after seeing these numbers.
+One pass over 1 July – 6 September 2026 with the frozen protocol; produced by [scripts/final.py](scripts/final.py), full output in [reports/final_output.txt](reports/final_output.txt). 171 Kyiv alerts in the period. Nothing in the models, features or thresholds was changed after seeing these numbers; what came later concerns only what the program displays and how the results are described.
 
 **"Start": will a Kyiv alert start within 30 minutes** — 17,664 points, base rate 5.47% (validation: 3.28%)
 
@@ -476,7 +480,7 @@ Reference: saying "yes" always gives 5.5% precision.
 
 - **The forecast held up.** In the default mode the program warned of 64% of the alerts, said "yes" 11.7% of the quiet time, and about one "yes" in six was right — more than three times the base rate. Recall came out at 38.4% against the 40% target: the threshold transferred well.
 - **LightGBM is the best by PR-AUC, but not by much.** Its lead over the logistic regression is 1.8 points in the default mode and 0.4 points on full history. The bootstrap below shows that a difference of this size is well within chance, so LightGBM cannot be claimed to be better than the regression on new data. Its advantage on validation (14.3% against 11.3%) shrank on the test.
-- **The default mode was not the better one on the test** (18.9% against 19.8%). It was named before the test and stays the default; the difference is within the seed noise measured earlier.
+- **The default mode was not the better one on the test** (18.9% against 19.8%). It was named before the test and stays the default; the two modes cannot be told apart on this test (−0.9 points, 95% interval −2.4 … +1.2).
 - **The frequency table does better than expected at its threshold**: the highest precision among the simple methods (23.6%) at a somewhat lower recall.
 - The probabilities are too low on average (3.6% predicted against 5.5% observed): the test period is more intense than anything the models were trained on.
 
@@ -505,7 +509,7 @@ Reference: saying "yes" always gives 5.5% precision.
 
 One test period of 68 days with 171 alerts; neighbouring 5-minute points are near-copies, so the effective sample is much smaller than the point counts suggest. To see how much of the differences could be chance, the test forecasts were resampled with a paired block bootstrap: [scripts/bootstrap.py](scripts/bootstrap.py), output in [reports/bootstrap_output.txt](reports/bootstrap_output.txt) and [reports/bootstrap.csv](reports/bootstrap.csv).
 
-Method: the period is cut into day-long blocks starting at 12:00 Kyiv time, so that a night attack stays in one block (69 blocks for "start", 54 with a Kyiv alert for "end"). Blocks are drawn with replacement 2,000 times, and both models of a comparison are scored on the same draw. The interval is the 2.5th to 97.5th percentile. The rule was set before the run: if the interval of a difference contains zero, the two are reported as not distinguishable on this test.
+Method: the period is cut into day-long blocks starting at 12:00 Kyiv time, so that a night attack stays in one block (69 blocks for "start" — the noon boundary splits the 68 days into 69 pieces — and 54 with a Kyiv alert for "end"). Blocks are drawn with replacement 2,000 times, and both models of a comparison are scored on the same draw. The interval is the 2.5th to 97.5th percentile. The rule was set before the run: if the interval of a difference contains zero, the two are reported as not distinguishable on this test.
 
 Nothing was tuned or re-chosen. LightGBM was loaded from `models/`. The two baselines had not been saved, so they were fitted again by the same deterministic procedure; the script checks that every reproduced metric equals the published one and stops otherwise.
 
@@ -561,6 +565,7 @@ Who corrected whom and what changed.
 | Author → Claude | Claude suggested not committing the CSV | The CSV is committed to the repository |
 | Claude → Claude | "Before December 2025 alerts were oblast-level" | Hromada-level rows exist from 2022, the move to raions happened during 2025 |
 | Claude, confirmed by author | Suspicion: 1,010 alerts in Kyiv in 2022 is too many | Exact duplicates found across the whole file; the real count is 505 |
+| Author → Claude | Claude suggested giving the model two hour-of-day features, Kyiv and Moscow time, and comparing them | The author chose the Kyiv hour alone (decision 7); the Moscow hour was never tried |
 | Author, verified by Claude | Suspicion: time in the dataset is UTC and summer time will cause a problem | Confirmed; option A chosen |
 | Claude → Claude | Argument against option B: alerts spanning a switch would get a wrong duration | No Kyiv alert spans a switch; only the code-complexity argument remains |
 | Author → Claude | Claude wrote the README in Ukrainian | The whole project is in English |
@@ -572,7 +577,7 @@ Who corrected whom and what changed.
 | Author → Claude | The EDA table showed 93–100% recall for Kharkiv, Donetsk and Dnipropetrovsk without saying that it means nothing | The author spotted that these regions are simply always under alert; a lift column and an explanation were added |
 | Author → Claude | Claude proposed removing the three regions from the features because their lift is 1.0 | Rejected by the author: they stay, and features are changed only if the final result is unsatisfactory (decision 16) |
 | Claude → Claude | Assumed ubilling would report when the last Kyiv alert ended | Checked once Kyiv was quiet: no mode and no source returns it |
-| Author → Claude | Claude proposed keeping the "minutes since the last all-clear" feature by having the program remember the all-clear moment while it runs | The author pointed out that the program is not a long-running monitor: the user opens it, looks and leaves. The feature was removed (decision 18) |
+| Author → Claude | Claude proposed keeping the "minutes since the last all-clear" feature by having the program remember the all-clear moment while it runs. In doing so Claude decided on its own, without asking, that the program is a long-running monitor | The author stopped it before any code was written: nobody is expected to keep the program open for more than about half an hour at a stretch, so the feature would be wasted effort. It was removed (decision 18) |
 | Author → Claude | Claude proposed reducing the neighbour rule to Kyiv oblast alone, because Chernihiv is under alert most of the time | The author insisted that adjacent oblasts matter. Both variants were measured: as an OR-switch the adjacent oblasts are useless ("yes" 74% of the time), as a count they add information |
 | Claude → Claude | "A flag that is almost always on is harmless for a logistic regression, it gets a weight near zero" | Wrong: the Kharkiv flag, constant in the recent training period, got a weight of −2.58 and halved the PR-AUC. The filter in decision 16 was added |
 | Author + Claude | Decision 16 kept every region; the baselines then showed that one of those flags (Kharkiv) breaks the logistic regression on the recent period | Regions are still not removed by hand. The author accepted a narrow technical filter — drop a feature that is constant in the training period — and it was merged into decision 16 |
@@ -593,6 +598,8 @@ Who corrected whom and what changed.
 | Author → Claude | The test results were reported as point values; README said that no confidence intervals had been computed | The author asked for a resampling of the test forecasts and approved the method before any code was written. Result: LightGBM and the logistic regression cannot be told apart on "start"; the miss on "end" is real |
 | Author → Claude | Decision 2 said "Measured, not assumed" about LightGBM's advantage, citing validation only | Rewritten from the bootstrap: the advantage was not confirmed on the test (+1.8 points, interval −3.0 … +7.0), and on "end" LightGBM's answer is worse than the baseline's |
 | Author → Claude | The summary and this log credited the author with finding the duplicate rows | The author pointed out that Claude had raised the suspicion and found the duplicates, and that the author had only confirmed it. The log row now reads "Claude, confirmed by author", and the summary lists the UTC and summer-time issue, which the author raised unprompted |
+| Author → Claude | After the program was made to refresh itself (decision 23), Claude wrote that this "reverses the assumption behind decision 18" and called it a contradiction. README then gave "the program is not a monitor" as the reason the all-clear feature was dropped | The author corrected the record: the reason was never the word "monitor" but the length of a session — about half an hour at most — which refreshing the screen does not change. Decisions 18 and 23 and the extensions list were rewritten; there is no contradiction between them |
+| Author → Claude | Two decisions made by the author were missing from the decisions table: the Kyiv hour alone as a feature, and committing the trained models | Added to decision 7 and as decision 24 after the author asked for a check of decisions that had been left out |
 
 ## Stack
 
@@ -610,7 +617,7 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · joblib · matplotl
 Possible extensions:
 
 - Use the alerts.in.ua history endpoint (last month only) for a rough quality check under the new yellow/red regime. The token would be read from an environment variable and never committed.
-- Now that the program keeps running (decision 23), track the moment of the last Kyiv all-clear and add "minutes since the last all-clear" as a feature (1.6–1.9× the base rate in the first hour, see decision 18). This needs retraining and a fresh, unused test period.
+- Not planned: "minutes since the last Kyiv all-clear" as a feature. It was considered and dropped (decision 18) and would make sense only if the program were rebuilt as an always-on service, which it is not meant to be.
 
 ## Licences
 

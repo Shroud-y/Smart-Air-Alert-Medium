@@ -2,10 +2,10 @@
 
 Every feature at time t is computed only from a snapshot of the state at t:
 which alerts are active and when they started. Nothing about alerts that
-have already ended is used: the live API does not report it, and the models
-were trained and tested without it (README, decisions 18 and 23). An alert's
-end time is used only as "has it ended by t". The same code serves history
-and live data.
+have already ended is used: the live API does not report it, and remembering
+it inside the program was judged wasted effort for sessions of about half an
+hour (README, decision 18). An alert's end time is used only as "has it ended
+by t". The same code serves history and live data.
 
 All arithmetic is in UTC epoch seconds; Kyiv-local calendar values are
 derived separately (README, "Time", option A).
