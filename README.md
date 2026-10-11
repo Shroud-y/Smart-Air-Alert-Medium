@@ -72,6 +72,8 @@ The trained models are in `models/`. To rebuild everything from the CSV: `python
 
 Checked the way a reviewer would run it: a fresh clone into an empty folder, a new virtual environment, `pip install -r requirements.txt`, then `pytest` (31 passed) and the program in replay and live modes. Done on Windows with Python 3.11.9 only; Linux and macOS were not tried.
 
+The author also reviewed the code, to the extent of their own skills, and ran the program by hand with different moments, modes and parameters. The results of these manual runs were not saved, so they are mentioned here as a statement, not as evidence.
+
 ## Why Kyiv only
 
 The chance of an alert in Kyiv depends strongly on the state of neighbouring oblasts (Chernihiv, Kyiv oblast and others). That gives the model a strong signal and keeps the task feasible in two days. The hypothesis is supported by [arXiv 2411.14625](https://arxiv.org/html/2411.14625v1): the state of neighbouring oblasts is the most important group of features. Our own analysis refines it: Kyiv oblast is the strong signal, Chernihiv on its own is a weak one (see "Exploratory analysis", question 2).
