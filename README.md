@@ -28,6 +28,18 @@ Corrections by the author that changed the result (the full list is in the [Corr
 
 ## How to run
 
+Python 3.11. A virtual environment keeps the pinned versions apart from the system ones:
+
+```bash
+python -m venv .venv
+```
+
+```bash
+.venv\Scripts\activate
+```
+
+(on Linux / macOS: `source .venv/bin/activate`)
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -56,6 +68,8 @@ During a Kyiv alert the question changes to "will it end", and the measured weak
 All regions are shown as a wall of equal bricks, Kyiv city first. Live data colours a brick red (missile threat) or yellow (drone threat); the dataset has no levels, so in replay an alert is simply red. Crimea is never reported by the sources used, and Luhansk oblast is absent from the dataset (permanent alert), so they are shown as "no data". If an update fails while the program is running, the last screen stays and the failure is shown under it.
 
 The trained models are in `models/`. To rebuild everything from the CSV: `python -X utf8 scripts/final.py`. Tests: `pytest`.
+
+Checked the way a reviewer would run it: a fresh clone into an empty folder, a new virtual environment, `pip install -r requirements.txt`, then `pytest` (31 passed) and the program in replay and live modes. Done on Windows with Python 3.11.9 only; Linux and macOS were not tried.
 
 ## Why Kyiv only
 
