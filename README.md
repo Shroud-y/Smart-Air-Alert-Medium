@@ -22,7 +22,7 @@ A console program that shows where air raid alerts are active in Ukraine and ans
 **What did not work:** the "end" forecast missed its target and at its threshold is worse than the simple baseline; on "start" LightGBM cannot be told apart from a logistic regression (+1.8 points, 95% interval −3.0 … +7.0). Details in [Test results](#test-results).
 
 Corrections by the author that changed the result (the full list is in the [Corrections log](#corrections-log)):
-- found that 38% of the dataset rows were exact duplicates: 1,010 "alerts" in Kyiv in 2022 were really 505;
+- raised, unprompted, that the dataset is in UTC while Ukraine switches between UTC+2 and UTC+3, so the same UTC hour is a different hour for people; this led to the time handling of decision 7;
 - caught that the official data file had stopped updating, which Claude had reported as updated daily;
 - noticed that the 93–100% recall of frontline regions meant only "always under alert", not a signal.
 
@@ -560,7 +560,7 @@ Who corrected whom and what changed.
 | Author → Claude | Claude wrote that the dataset is updated daily | Only the volunteer data is updated daily; the official file stopped on 2026-09-07. The test period was shortened to 2026-09-06 |
 | Author → Claude | Claude suggested not committing the CSV | The CSV is committed to the repository |
 | Claude → Claude | "Before December 2025 alerts were oblast-level" | Hromada-level rows exist from 2022, the move to raions happened during 2025 |
-| Author, verified by Claude | Suspicion: 1,010 alerts in Kyiv in 2022 is too many | Exact duplicates found across the whole file; the real count is 505 |
+| Claude, confirmed by author | Suspicion: 1,010 alerts in Kyiv in 2022 is too many | Exact duplicates found across the whole file; the real count is 505 |
 | Author, verified by Claude | Suspicion: time in the dataset is UTC and summer time will cause a problem | Confirmed; option A chosen |
 | Claude → Claude | Argument against option B: alerts spanning a switch would get a wrong duration | No Kyiv alert spans a switch; only the code-complexity argument remains |
 | Author → Claude | Claude wrote the README in Ukrainian | The whole project is in English |
@@ -592,6 +592,7 @@ Who corrected whom and what changed.
 | Author → Claude | README still said "shows a map", counted 23 tests, and a docstring said the program is "not left running" | The author listed the stale places; Claude re-read the whole README against the code and fixed these and others (regenerated output files that no longer matched their tables, the section order) |
 | Author → Claude | The test results were reported as point values; README said that no confidence intervals had been computed | The author asked for a resampling of the test forecasts and approved the method before any code was written. Result: LightGBM and the logistic regression cannot be told apart on "start"; the miss on "end" is real |
 | Author → Claude | Decision 2 said "Measured, not assumed" about LightGBM's advantage, citing validation only | Rewritten from the bootstrap: the advantage was not confirmed on the test (+1.8 points, interval −3.0 … +7.0), and on "end" LightGBM's answer is worse than the baseline's |
+| Author → Claude | The summary and this log credited the author with finding the duplicate rows | The author pointed out that Claude had raised the suspicion and found the duplicates, and that the author had only confirmed it. The log row now reads "Claude, confirmed by author", and the summary lists the UTC and summer-time issue, which the author raised unprompted |
 
 ## Stack
 
