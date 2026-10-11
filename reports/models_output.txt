@@ -1,0 +1,74 @@
+  [y_start, full history] train rows 372898, positives 10583, features 111, constant and left out: 1
+  [y_start, from 2024-07] train rows 144690, positives 4840, features 109, constant and left out: 3
+
+== START: will a Kyiv alert start within 30 min (validation, 49187 rows, base rate 3.28%)
+                                    pr_auc   brier  threshold  precision  recall    f1  yes_share  false_yes_per_day
+model                 train                                                                                         
+baseline: StateLogReg full history     9.7  0.0310      0.112       14.7    33.0  20.3        7.4               1.96
+frequency table       full history    10.0  0.0306      0.081       13.7    41.8  20.6       10.0               2.29
+LightGBM              full history    12.8  0.0302      0.150       20.9    29.4  24.4        4.6               2.07
+baseline: StateLogReg from 2024-07    11.3  0.0304      0.147       17.9    27.9  21.8        5.1               1.49
+frequency table       from 2024-07     9.9  0.0305      0.077       13.8    42.9  20.8       10.2               2.12
+LightGBM              from 2024-07    12.5  0.0302      0.115       19.6    30.8  23.9        5.2               2.39
+
+  frequency table (from 2024-07): 64 cells, overall rate 3.35%; n = training points, k = followed by the event
+           Kyiv oblast adjacent oblasts    time of day      n      k   raw     p
+   0   alert 15-60 min      3+ adjacent    night 22-06   1823  435.0  23.9  23.3
+   1   alert 15-60 min      3+ adjacent  evening 18-22    425   93.0  21.9  19.9
+   2    alert < 15 min      3+ adjacent    night 22-06    595  119.0  20.0  18.7
+   3    alert < 15 min       0 adjacent      day 12-18     31   11.0  35.5  15.6
+   4    alert < 15 min      3+ adjacent  evening 18-22    209   38.0  18.2  15.3
+   5   alert 15-60 min       2 adjacent  evening 18-22    228   39.0  17.1  14.6
+   6    alert > 60 min      3+ adjacent    night 22-06   5452  796.0  14.6  14.5
+   7   alert 15-60 min       1 adjacent    night 22-06    348   55.0  15.8  14.2
+   60   alert > 60 min       0 adjacent    night 22-06     61    0.0   0.0   1.5
+   61  alert 15-60 min       1 adjacent  morning 06-12    327    4.0   1.2   1.5
+   62            quiet       0 adjacent  morning 06-12  24122  301.0   1.2   1.3
+   63            quiet       0 adjacent    night 22-06  15945  171.0   1.1   1.1
+
+  feature importance, share of gain (full history):
+   kyiv_oblast_on 12.8%, kyiv_oblast_share 10.5%, poltava_share 4.4%, chernihiv_share 4.2%, hour_cos 3.9%, hour_sin 3.3%, kharkiv_oldest_min 3.3%, dnipropetrovsk_newest_min 3.1%, dnipropetrovsk_oldest_min 2.9%, chernihiv_oldest_min 2.7%, odesa_oldest_min 2.4%, chernihiv_newest_min 2.3%
+   by group: Kyiv oblast and its raions 28.7%, Kyiv city itself 0.0%, calendar 11.0%, region count 2.0%, other regions 58.2%
+   by feature kind (regions only): _on 15.6%, _share 22.3%, _newest_min 23.6%, _oldest_min 24.8%
+
+  feature importance, share of gain (from 2024-07):
+   kyiv_oblast_on 16.4%, kyiv_oblast_share 12.6%, chernihiv_oldest_min 3.8%, hour_cos 3.7%, dow_kyiv 3.5%, chernihiv_share 3.2%, kyiv_oblast_newest_min 2.9%, donetsk_newest_min 2.8%, hour_sin 2.7%, zaporizhzhia_newest_min 2.6%, sumy_oldest_min 2.5%, sumy_newest_min 2.5%
+   by group: Kyiv oblast and its raions 37.8%, Kyiv city itself 0.0%, calendar 11.5%, region count 1.3%, other regions 49.4%
+   by feature kind (regions only): _on 17.8%, _share 20.3%, _newest_min 25.9%, _oldest_min 19.6%
+  [y_end, full history] train rows 26646, positives 9632, features 112, constant and left out: 0
+  [y_end, from 2024-07] train rows 13417, positives 4244, features 110, constant and left out: 2
+
+== END: will the current Kyiv alert end within 30 min (validation, 2936 rows, base rate 46.32%)
+                                      pr_auc   brier  threshold  precision  recall    f1  yes_share  false_yes_per_day
+model                   train                                                                                         
+baseline: DurationCurve full history    60.6  0.2355      0.324       57.7    79.6  66.9       63.9               0.21
+frequency table         full history    63.4  0.2298      0.324       57.0    82.1  67.3       66.8               0.23
+LightGBM                full history    72.2  0.2098      0.216       58.7    86.0  69.8       67.9               0.27
+baseline: DurationCurve from 2024-07    60.8  0.2309      0.223       56.5    82.4  67.0       67.6               0.18
+frequency table         from 2024-07    64.5  0.2238      0.282       57.0    82.1  67.3       66.8               0.23
+LightGBM                from 2024-07    75.1  0.1940      0.259       61.7    83.5  70.9       62.7               0.22
+
+  frequency table (from 2024-07): 33 cells, overall rate 31.63%; n = training points, k = followed by the event
+      Kyiv alert lasts         Kyiv oblast    time of day     n      k   raw     p
+   0         15-30 min  oblast under alert      day 12-18   259  217.0  83.8  75.3
+   1          < 15 min  oblast under alert      day 12-18   404  319.0  79.0  73.7
+   2          < 15 min  oblast under alert  morning 06-12   410  282.0  68.8  64.7
+   3         15-30 min  oblast under alert  morning 06-12   316  221.0  69.9  64.7
+   4         15-30 min  oblast under alert  evening 18-22   234  161.0  68.8  62.3
+   5         30-60 min  oblast under alert      day 12-18   115   86.0  74.8  61.7
+   6          < 15 min  oblast under alert  evening 18-22   326  203.0  62.3  58.2
+   7          < 15 min        oblast quiet      day 12-18    26   23.0  88.5  51.1
+   29       60-120 min  oblast under alert  morning 06-12   378  105.0  27.8  28.2
+   30        30-60 min  oblast under alert    night 22-06  1471  384.0  26.1  26.3
+   31       60-120 min  oblast under alert    night 22-06  1944  339.0  17.4  17.8
+   32        > 120 min  oblast under alert    night 22-06  3565  531.0  14.9  15.1
+
+  feature importance, share of gain (full history):
+   poltava_newest_min 13.1%, kharkiv_oldest_min 6.2%, hour_cos 5.1%, chernihiv_newest_min 5.0%, hour_sin 4.6%, chernihiv_oldest_min 4.3%, poltava_oldest_min 4.0%, hour_kyiv 2.5%, kyiv_on_min 2.4%, regions_on 2.3%, cherkasy_oldest_min 2.1%, zakarpattia_newest_min 2.1%
+   by group: Kyiv oblast and its raions 6.9%, Kyiv city itself 2.4%, calendar 13.6%, region count 2.3%, other regions 74.8%
+   by feature kind (regions only): _on 2.6%, _share 3.5%, _newest_min 40.1%, _oldest_min 33.1%
+
+  feature importance, share of gain (from 2024-07):
+   chernihiv_newest_min 19.2%, poltava_newest_min 8.2%, chernihiv_oldest_min 7.8%, hour_cos 4.9%, hour_sin 3.9%, kyiv_on_min 3.6%, regions_on 3.2%, donetsk_newest_min 2.8%, ko_vyshhorod_min 2.6%, cherkasy_oldest_min 1.9%, sumy_newest_min 1.9%, zhytomyr_newest_min 1.9%
+   by group: Kyiv oblast and its raions 8.8%, Kyiv city itself 3.6%, calendar 11.8%, region count 3.2%, other regions 72.7%
+   by feature kind (regions only): _on 3.4%, _share 3.4%, _newest_min 47.9%, _oldest_min 23.4%

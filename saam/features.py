@@ -12,6 +12,7 @@ derived separately (README, "Time", option A).
 import numpy as np
 import pandas as pd
 
+from .config import MINUTES_CAP
 from .data import KYIV_CITY, KYIV_TZ, REGION_EN
 
 EXCLUDED = {"Луганська область"}  # permanent alert, absent from the data
@@ -62,6 +63,13 @@ def _elapsed(starts, ends, grid):
     kc = np.clip(k, 0, None)
     active = (k >= 0) & (ends[kc] > grid)
     return np.where(active, (grid - starts[kc]) / 60.0, np.nan)
+
+
+def _cap(minutes):
+    """Cap "minutes since an alert started" at MINUTES_CAP, i.e. "long ago".
+    Uncapped, the value for a region with a months-long alert is a day
+    counter and lets a model learn the calendar date."""
+    return np.minimum(minutes, MINUTES_CAP).astype("float32")
 
 
 def _region_block(g, grid):
@@ -117,8 +125,8 @@ def build_features(df, grid):
 
         cols[f"{name}_on"] = on.astype("float32")
         cols[f"{name}_share"] = share.astype("float32")
-        cols[f"{name}_newest_min"] = newest.astype("float32")
-        cols[f"{name}_oldest_min"] = oldest.astype("float32")
+        cols[f"{name}_newest_min"] = _cap(newest)
+        cols[f"{name}_oldest_min"] = _cap(oldest)
         regions_on += on
 
         if region == KYIV_OBLAST:
@@ -127,7 +135,7 @@ def build_features(df, grid):
                 parts = [a for a in (raion_el.get(raion), whole) if a is not None]
                 el = _nan_reduce(parts, np.nanmin, n)
                 cols[f"ko_{short}_on"] = (~np.isnan(el)).astype("float32")
-                cols[f"ko_{short}_min"] = el.astype("float32")
+                cols[f"ko_{short}_min"] = _cap(el)
 
     cols["regions_on"] = regions_on.astype("float32")
 

@@ -177,3 +177,16 @@ def test_loader_drops_exact_duplicates_and_zero_duration(tmp_path):
 def test_varying_columns_drops_features_constant_in_training():
     X = pd.DataFrame({"always_on": [1.0, 1.0, 1.0], "varies": [0.0, 1.0, 1.0], "all_nan": [np.nan] * 3, "nan_or_value": [np.nan, 5.0, 5.0]})
     assert varying_columns(X) == ["varies", "nan_or_value"]
+
+
+def test_region_minutes_are_capped_but_kyiv_city_duration_is_not():
+    df = rows(
+        (KO, "Броварський район", "", "2025-03-01 00:00", "2025-03-03 00:00"),
+        (KYIV_CITY, "", "", "2025-03-01 00:00", "2025-03-01 10:00"),
+    )
+    f = build_features(df, make_grid("2025-03-01 00:00", "2025-03-02 12:00", 5))
+    assert at(f, "2025-03-01 02:00").kyiv_oblast_oldest_min == 120
+    for ts in ("2025-03-01 03:00", "2025-03-01 09:00", "2025-03-02 11:00"):  # 3 h, 9 h and 35 h in
+        r = at(f, ts)
+        assert r.kyiv_oblast_oldest_min == 180 and r.kyiv_oblast_newest_min == 180 and r.ko_brovary_min == 180
+    assert at(f, "2025-03-01 09:00").kyiv_on_min == 540

@@ -2,6 +2,7 @@
 
 HORIZON_MIN = 30  # forecast horizon H
 GRID_STEP_MIN = 5  # step of the training / evaluation grid
+MINUTES_CAP = 180  # "how long ago" features of regions are capped here (README, decision 19)
 
 # Training period variants compared on validation (README, decision 14).
 TRAIN_START_FULL = "2022-03-15"
