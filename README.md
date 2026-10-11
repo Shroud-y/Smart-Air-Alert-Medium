@@ -7,7 +7,7 @@ A contest MVP: a console program that shows a map of current air raid alerts in 
 
 Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities and technical details live in dashboards.
 
-> Status: plan and stack agreed, data verified, exploratory analysis done. No model code yet.
+> Status: data verified, exploratory analysis done, features and tests written, baselines measured on validation. Models are next.
 > This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
 
 ## Why Kyiv only
@@ -36,6 +36,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 16 | All regions stay in the feature set, including Kharkiv, Donetsk and Dnipropetrovsk whose flags carry no signal (lift 1.0). Features are revisited only if the final result is unsatisfactory | The author's call: nothing is removed pre-emptively on the basis of a single statistic. Known risk: with full-history training these flags can act as a hidden clock (Kharkiv was under alert 15% of the time in 2022 and 100% from mid-2024); the comparison in decision 14 will show whether it matters |
 | 17 | Features and metrics are computed on a 5-minute grid | Five times fewer near-identical rows than a 1-minute grid with the same base rates (2.99% for "start"); one constant in `saam/config.py` |
 | 18 | Features use only a snapshot of the current state: which alerts are active and when they started. Nothing about alerts that have already ended | The live API reports only active alerts, and the program is opened for a quick look, not left running, so it cannot remember earlier events itself. "Minutes since the last Kyiv all-clear" was dropped for this reason, although it carries a moderate signal (1.6–1.9× the base rate in the first hour) |
+| 19 | A feature that takes a single value in the training period is not given to the model | Found on the baselines: Kharkiv is under alert 100% of the training time from mid-2024, the logistic regression put half of its intercept on that flag and broke as soon as the flag started to vary. A technical rule, not a judgement about which regions matter; decision 16 otherwise stands |
 
 ## Data
 
@@ -174,15 +175,56 @@ No Kyiv alert in the dataset spans a switch moment (checked on all 9 switches); 
 - PR-AUC — primary (classes are imbalanced).
 - Brier score and calibration curve.
 - Precision / recall / F1 at a threshold picked on validation; the yes / no answer comes from this threshold.
-- Number of false "yes" per day.
+- Number of false "yes" per day. A false "yes" is an unbroken run of "yes" forecasts that is not followed by an alert.
+
+Until the threshold question is settled, the threshold is the one with the best F1.
 
 **Baselines**
 
 1. Climatology: frequency of an alert start by Kyiv hour × day of week.
-2. Neighbour rule: "yes" if Kyiv oblast or an adjacent oblast is under alert right now.
-3. Logistic regression on the current state of oblasts only.
+2. Neighbour rule: "yes" if Kyiv oblast or an adjacent oblast (Chernihiv, Zhytomyr, Cherkasy, Poltava, Vinnytsia) is under alert right now. Two variants are reported next to it: Kyiv oblast alone, and the number of these six regions under alert.
+3. Logistic regression on the yes/no state of every region.
 
 For the "end" task: the empirical duration curve — P(end within `H` min | alert has lasted `t` min).
+
+### Baseline results
+
+Validation period, January–June 2026, 5-minute grid; produced by [scripts/baselines.py](scripts/baselines.py), full output in [reports/baselines_output.txt](reports/baselines_output.txt). The test period has not been touched. Thresholds are picked on the same validation data, so precision, recall and F1 are slightly optimistic, equally for every row.
+
+**"Start" task** — 49,187 points, 1,611 positive, base rate 3.28%.
+
+| Baseline | Trained on | PR-AUC | Precision | Recall | F1 | Says "yes" | False "yes" per day |
+|---|---|---|---|---|---|---|---|
+| Random | — | 3.2% | 3.3% | 91.9% | 6.4% | 91% of the time | 21.7 |
+| Climatology | full history | 3.9% | 4.2% | 29.0% | 7.4% | 23% | 3.0 |
+| Climatology | from 2024-07 | 3.9% | 4.7% | 28.2% | 8.0% | 20% | 1.5 |
+| Rule: Kyiv oblast | — | 7.3% | 11.5% | 49.3% | 18.6% | 14% | 2.0 |
+| Rule: Kyiv oblast or adjacent | — | 8.0% | 4.0% | 90.6% | 7.7% | 74% | 4.2 |
+| Rule: at least 4 of the 6 neighbours | — | 8.0% | 13.4% | 22.1% | 16.7% | 5% | 1.2 |
+| Logistic regression | full history | 9.7% | 14.7% | 33.0% | 20.3% | 7% | 2.0 |
+| **Logistic regression** | **from 2024-07** | **11.3%** | 17.9% | 27.9% | **21.8%** | 5% | 1.5 |
+
+What this shows:
+
+- The bar is low: the best baseline has a PR-AUC of 11.3% and an F1 of 22%. The task is hard.
+- Hour and day of week alone give almost nothing (3.9% against a 3.3% base rate). Forecasting from day and time only, an idea considered early on, would have produced exactly this.
+- Adjacent oblasts matter as part of the picture, not as a switch. "Kyiv oblast or adjacent" catches 91% of alerts but says "yes" 74% of the time. Counting the neighbours instead of OR-ing them ranks better than Kyiv oblast alone (8.0% against 7.3%).
+- Training from mid-2024 beats the full history for the logistic regression (11.3% against 9.7%), but only with decision 19. Without it the recent variant scored 6.0%: the Kharkiv flag got a weight of −2.58 and the probability was inflated about 13 times whenever Kharkiv was not under alert (16% of the validation period).
+
+![Baselines, precision vs recall](reports/figures/baselines_start_pr.png)
+![Baselines, calibration](reports/figures/baselines_start_calibration.png)
+
+**"End" task** — 2,936 points, base rate 46.3%.
+
+| Baseline | Trained on | PR-AUC | Brier | F1 |
+|---|---|---|---|---|
+| Always "yes" | — | 46.4% | — | 63.4% |
+| Duration curve | full history | 60.6% | 0.2355 | 66.9% |
+| Duration curve | from 2024-07 | 60.8% | 0.2309 | 67.0% |
+
+The duration curve ranks clearly better than chance but barely beats "always yes" on F1. With almost half of the points positive, F1 is a weak criterion for this task; PR-AUC and Brier are the ones to watch.
+
+For reference, the base rate of the "start" task grows with the horizon: 3.9% at 30 min, 7.4% at 60 min and 13.6% at 120 min (2026).
 
 **Time split** (no shuffling, gap ≥ `H` between parts)
 
@@ -240,6 +282,9 @@ Who corrected whom and what changed.
 | Author → Claude | Claude proposed removing the three regions from the features because their lift is 1.0 | Rejected by the author: they stay, and features are changed only if the final result is unsatisfactory (decision 16) |
 | Claude → Claude | Assumed ubilling would report when the last Kyiv alert ended | Checked once Kyiv was quiet: no mode and no source returns it |
 | Author → Claude | Claude proposed keeping the "minutes since the last all-clear" feature by having the program remember the all-clear moment while it runs | The author pointed out that the program is not a long-running monitor: the user opens it, looks and leaves. The feature was removed (decision 18) |
+| Author → Claude | Claude proposed reducing the neighbour rule to Kyiv oblast alone, because Chernihiv is under alert most of the time | The author insisted that adjacent oblasts matter. Both variants were measured: as an OR-switch the adjacent oblasts are useless ("yes" 74% of the time), as a count they add information |
+| Claude → Claude | "A flag that is almost always on is harmless for a logistic regression, it gets a weight near zero" | Wrong: the Kharkiv flag, constant in the recent training period, got a weight of −2.58 and halved the PR-AUC. Decision 19 added |
+| Data → author | The author kept every region and agreed to revisit features only if the final result was unsatisfactory (decision 16) | The baselines showed the problem earlier; the author accepted a narrow technical rule instead of removing regions by hand |
 
 ## Stack
 
@@ -248,8 +293,8 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich
 ## Plan
 
 1. ~~EDA~~ — done, see "Exploratory analysis".
-2. Data loading and cleaning, time grid, features, target + leak tests.
-3. Baselines and metrics.
+2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features, 13 tests.
+3. ~~Baselines and metrics~~ — done, see "Baseline results".
 4. Probabilistic algorithm and LightGBM, comparison.
 5. Ubilling client, `--replay` mode.
 6. Console interface: map, forecast, `--debug` panel.

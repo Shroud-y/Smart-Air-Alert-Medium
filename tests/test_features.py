@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from saam.data import KYIV_CITY, load_alerts
+from saam.dataset import varying_columns
 from saam.features import build_features, build_targets, make_grid
 
 KO = "Київська область"
@@ -171,3 +172,8 @@ def test_loader_drops_exact_duplicates_and_zero_duration(tmp_path):
     )
     df = load_alerts(p)
     assert len(df) == 2  # the copy and the zero-length row are gone, the differing row stays
+
+
+def test_varying_columns_drops_features_constant_in_training():
+    X = pd.DataFrame({"always_on": [1.0, 1.0, 1.0], "varies": [0.0, 1.0, 1.0], "all_nan": [np.nan] * 3, "nan_or_value": [np.nan, 5.0, 5.0]})
+    assert varying_columns(X) == ["varies", "nan_or_value"]
