@@ -7,7 +7,7 @@ A contest MVP: a console program that shows a map of current air raid alerts in 
 
 Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities and technical details live in dashboards.
 
-> Status: data verified, exploratory analysis done, features and tests written, baselines and first versions of both models measured on validation. Not tuned yet; the test period has not been touched.
+> Status: models trained and evaluated once on the test period. The "start" forecast held up; the "end" forecast did not meet its target — see "Test results". The console program is next.
 > This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
 
 ## Why Kyiv only
@@ -39,6 +39,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 19 | "Minutes since an alert started" features of regions and raions are capped at 180 ("long ago"). The duration of the Kyiv city alert itself is not capped | Found on the first LightGBM run: for a region with a months-long alert the uncapped value is a day counter (one hromada alert in Kharkiv oblast lasted 604 days), and the model learned the calendar date from it. See "Model results" |
 | 20 | The probabilistic algorithm is a table of conditional frequencies over three factors, smoothed towards the overall rate. "Start": state of Kyiv oblast (quiet / alert < 15 / 15–60 / > 60 min) × number of adjacent oblasts under alert (0, 1, 2, 3+) × time of day (4 parts), 64 cells. "End": how long the Kyiv alert has lasted (5 bands) × Kyiv oblast quiet or not × time of day | Every forecast can be read as a sentence ("night, oblast under alert for 20 min, three neighbours — 23%"), which suits the `--debug` panel. Naive Bayes over all flags was rejected: it assumes independent regions, and they are strongly linked |
 | 21 | The yes / no answer is cautious by design, and the caution points in opposite directions for the two tasks. "Start": the threshold must catch at least **40%** of pre-alert moments (recall). "End": a "yes, it will end" must be right at least **60%** of the time (precision) | The author's deliberate choice: an extra warning is better than a missed alert, and a perfect result is not expected from a learning project. For "end" the dangerous mistake is the opposite one — promising an all-clear that does not come. The numbers were chosen from a measured trade-off, see "Operating point"; Claude had proposed 50% and 70% |
+| 22 | The "end" forecast is shown as yes / no like the "start" forecast, although it missed its target on the test (precision 45% instead of 60%) | The author's call: the binary answer was the agreed format from the first message, and one output format for both tasks keeps the program simple. Nothing is re-tuned on the test. The test precision is reported next to the answer in the `--debug` panel |
 
 ## Data
 
@@ -369,6 +370,53 @@ Everything that affects the test result was fixed, and committed, before the tes
 5. Final training on train + validation, up to 30 June 2026 (decision 15).
 6. Test: 1 July – 6 September 2026, opened once. Both modes, the baselines and the frequency table are reported, each with a threshold picked on validation by the same rule.
 
+### Test results
+
+One pass over 1 July – 6 September 2026 with the frozen protocol; produced by [scripts/final.py](scripts/final.py), full output in [reports/final_output.txt](reports/final_output.txt). 171 Kyiv alerts in the period. Nothing was changed after seeing these numbers.
+
+**"Start": will a Kyiv alert start within 30 minutes** — 17,664 points, base rate 5.47% (validation: 3.28%)
+
+| Model | Mode | PR-AUC | Precision | Recall | Says "yes" | False "yes" per day | Alerts warned |
+|---|---|---|---|---|---|---|---|
+| Baseline: climatology | from 2024-07 | 7.4% | 6.8% | 42.1% | 33.7% | 2.2 | 44% |
+| Baseline: logistic regression | from 2024-07 | 17.1% | 13.8% | 39.3% | 15.6% | 2.3 | 61% |
+| Frequency table | from 2024-07 | 15.7% | 23.6% | 34.5% | 8.0% | 2.2 | 56% |
+| **LightGBM (default mode)** | from 2024-07 | 18.9% | 17.9% | 38.4% | 11.7% | 2.4 | **64%** |
+| Baseline: logistic regression | full history | 19.4% | 14.5% | 43.2% | 16.3% | 2.3 | 63% |
+| Frequency table | full history | 15.8% | 23.7% | 35.6% | 8.2% | 2.2 | 57% |
+| LightGBM | full history | **19.8%** | 26.6% | 35.7% | 7.3% | 2.6 | 63% |
+
+Reference: saying "yes" always gives 5.5% precision.
+
+- **The forecast held up.** In the default mode the program warned of 64% of the alerts, said "yes" 11.7% of the quiet time, and about one "yes" in six was right — more than three times the base rate. Recall came out at 38.4% against the 40% target: the threshold transferred well.
+- **LightGBM is the best by PR-AUC, but not by much.** Its lead over the logistic regression is 1.8 points in the default mode and 0.4 points on full history. With 171 alerts in one 68-day period this is not enough to claim that LightGBM is better than the regression on new data. Its advantage on validation (14.3% against 11.3%) shrank on the test.
+- **The default mode was not the better one on the test** (18.9% against 19.8%). It was named before the test and stays the default; the difference is within the seed noise measured earlier.
+- **The frequency table does better than expected at its threshold**: the highest precision among the simple methods (23.6%) at a somewhat lower recall.
+- The probabilities are too low on average (3.6% predicted against 5.5% observed): the test period is more intense than anything the models were trained on.
+
+![Test, precision vs recall](reports/figures/test_start_pr.png)
+![Forecast vs actual alerts](reports/figures/test_timeline.png)
+
+**"End": will the current alert end within 30 minutes** — 1,915 points, base rate 41.1% (validation: 46.3%)
+
+| Model | Mode | PR-AUC | Brier | Precision of "yes" | Real endings caught | Says "yes" |
+|---|---|---|---|---|---|---|
+| Baseline: duration curve | from 2024-07 | 50.9% | 0.233 | 52.0% | 62% | 49% |
+| Frequency table | from 2024-07 | 50.7% | 0.239 | 47.4% | 72% | 62% |
+| **LightGBM (default mode)** | from 2024-07 | 55.9% | 0.252 | **45.2%** | 97% | 88% |
+| Baseline: duration curve | full history | 51.4% | 0.230 | 52.0% | 62% | 49% |
+| Frequency table | full history | 49.1% | 0.234 | 46.2% | 68% | 60% |
+| LightGBM | full history | 58.8% | 0.228 | 44.8% | 96% | 88% |
+
+- **The target was not met.** The agreed rule was that a "yes, it will end" is right at least 60% of the time. On the test it was right 45% of the time, and the program said "yes" during 88% of alert time. At this threshold the forecast is barely better than always saying "yes" (41%), and no method reached 60%.
+- **The model's quality dropped, not only the threshold.** PR-AUC fell from 76% on validation to 56% on the test. In the default mode the Brier score (0.252) is worse than that of the simple duration curve (0.233) and worse than predicting the base rate for every point (0.242). LightGBM still ranks moments better than the baselines (PR-AUC 56–59% against 51%), but its probabilities are too high: 55% predicted on average against 41% observed.
+- **Diagnostics after the fact** (they explain the result and change nothing): the model that was not retrained on validation gives the same 46% precision, so the final retraining is not the cause. Even with hindsight, 60% precision is reachable on the test only for 20–40% of the endings. Alert durations in the test period look like those in validation (median 30 min against 29), so the change is in how the neighbours' state relates to the end of a Kyiv alert.
+- **What follows for the program (decision 22):** the "end" answer stays a yes / no, as agreed at the start. Claude proposed showing only the probability; the author kept the binary answer. The measured precision of 45% is stated here and shown in the `--debug` panel, so the weakness is documented rather than hidden.
+
+![Test, calibration](reports/figures/test_calibration.png)
+
+**How far these numbers can be trusted.** One test period of 68 days with 171 alerts; neighbouring 5-minute points are near-copies, so the effective sample is much smaller than the point counts suggest. No confidence intervals were computed. The validation period was used for many choices (feature cap, settings, thresholds), so validation numbers are optimistic; the gap between validation and test on "end" shows by how much they can be.
+
 **Time split** (no shuffling, gap ≥ `H` between parts)
 
 | Part | Period | Kyiv alert starts |
@@ -434,6 +482,9 @@ Who corrected whom and what changed.
 | Author → Claude | Thresholds were picked by the best F1, a formal rule Claude used by default | The author set the principle — better an extra warning than a missed alert — and chose recall 40% for "start" and precision 60% for "end" from the measured trade-off; Claude had suggested 50% and 70% |
 | Claude → author | "Better to warn once more" was stated for the program as a whole | For "end" the cautious direction is the opposite: the dangerous mistake is a false promise of an all-clear, so the constraint there is on precision, not recall |
 | Claude → Claude | Compared training periods and settings by a single run each | Refitting with 5 seeds showed ±0.5 points of pure chance on "start"; from then on settings are compared over several seeds, and one shared setting was adopted instead of four separate winners |
+| Test → both | On validation the "end" model looked like the clear success of the project (PR-AUC 76%, 88% of endings caught at 60% precision) | On the test it missed its target: precision 45% instead of 60%, Brier score worse than the simple duration curve. Reported as is; nothing was re-tuned after the test |
+| Test → Claude | Claude chose "from 2024-07" as the default mode and LightGBM as clearly the best model on the strength of validation | On the test the full-history mode was slightly ahead on "start", and the logistic regression came within 0.4–1.8 points of LightGBM. Both choices stay as frozen, with the weaker evidence stated |
+| Author → Claude | After the test Claude proposed showing only a probability for "end", without yes / no | The author kept yes / no, as decided at the start (decision 22) |
 
 ## Stack
 
@@ -444,7 +495,7 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich
 1. ~~EDA~~ — done, see "Exploratory analysis".
 2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features, 18 tests.
 3. ~~Baselines and metrics~~ — done, see "Baseline results".
-4. Probabilistic algorithm and LightGBM, comparison — first versions done, see "Model results". Tuning done, see "Tuning". Left: the final retraining of both modes and the test.
+4. ~~Probabilistic algorithm and LightGBM, comparison~~ — done, see "Model results", "Tuning" and "Test results".
 5. Ubilling client, `--replay` mode.
 6. Console interface: map, forecast, `--debug` panel.
 

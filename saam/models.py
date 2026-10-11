@@ -44,3 +44,22 @@ class Lgbm:
 
         g = pd.Series(self.model_.booster_.feature_importance("gain"), index=self.cols_)
         return (g / g.sum()).sort_values(ascending=False)
+
+
+class LgbmEnsemble:
+    """Average of several LightGBM models that differ only in the random seed.
+    Removes the seed-to-seed noise measured during tuning."""
+
+    def __init__(self, seeds=(0, 1, 2, 3, 4), **overrides):
+        self.seeds, self.overrides = tuple(seeds), overrides
+
+    def fit(self, X, y):
+        self.members_ = [Lgbm(random_state=s, **self.overrides).fit(X, y) for s in self.seeds]
+        self.cols_, self.dropped_ = self.members_[0].cols_, self.members_[0].dropped_
+        return self
+
+    def predict_proba(self, X):
+        return sum(m.predict_proba(X) for m in self.members_) / len(self.members_)
+
+    def importance(self):
+        return sum(m.importance() for m in self.members_).div(len(self.members_)).sort_values(ascending=False)

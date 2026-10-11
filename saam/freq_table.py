@@ -36,9 +36,13 @@ def _kyiv_alert(X):
     return np.digitize(X["kyiv_on_min"].to_numpy(), [15, 30, 60, 120])
 
 
+def _oblast_state(X):
+    return X["kyiv_oblast_on"].to_numpy().astype(int)
+
+
 FACTORS = {
     "start": [("Kyiv oblast", KYIV_OBLAST, _kyiv_oblast), ("adjacent oblasts", ADJACENT_ON, _adjacent), ("time of day", TIME_OF_DAY, _time_of_day)],
-    "end": [("Kyiv alert lasts", KYIV_ALERT, _kyiv_alert), ("Kyiv oblast", OBLAST_STATE, lambda X: X["kyiv_oblast_on"].to_numpy().astype(int)), ("time of day", TIME_OF_DAY, _time_of_day)],
+    "end": [("Kyiv alert lasts", KYIV_ALERT, _kyiv_alert), ("Kyiv oblast", OBLAST_STATE, _oblast_state), ("time of day", TIME_OF_DAY, _time_of_day)],
 }
 
 
