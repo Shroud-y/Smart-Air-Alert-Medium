@@ -19,7 +19,7 @@ A console program that shows where air raid alerts are active in Ukraine and ans
 | "Start": alerts warned / precision of "yes" / PR-AUC | 64% / 18% / 18.9% | 61% / 14% / 17.1% (logistic regression) |
 | "End": precision of "yes", target 60% | 45% | 52% (duration curve) |
 
-**What did not work:** the "end" forecast missed its target and at its threshold is worse than the simple baseline; on "start" the lead over a logistic regression is small. Details in [Test results](#test-results).
+**What did not work:** the "end" forecast missed its target and at its threshold is worse than the simple baseline; on "start" LightGBM cannot be told apart from a logistic regression (+1.8 points, 95% interval −3.0 … +7.0). Details in [Test results](#test-results).
 
 Corrections by the author that changed the result (the full list is in the [Corrections log](#corrections-log)):
 - found that 38% of the dataset rows were exact duplicates: 1,010 "alerts" in Kyiv in 2022 were really 505;
@@ -80,7 +80,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | # | Decision | Why |
 |---|---|---|
 | 1 | Two separate tasks: alert "start" and alert "end" | A combined target "alert active in N min" is explained almost entirely by an alert simply continuing, which gives misleadingly high metrics |
-| 2 | The forecast comes from LightGBM. The probabilistic algorithm (frequency table, decision 20) and the baselines are kept for comparison and explanation | Measured, not assumed: on validation LightGBM has the best PR-AUC and Brier score in both tasks and for both training periods ("start" 12.5–12.8% against 11.3% for the best baseline and 10.0% for the table; "end" 72–75% against 61% and 64%). It can use all the features, including raions and "minutes since" values that are empty when a region is quiet, and their combinations; the table is limited to three factors. Cost: its answers are harder to explain, and on "start" the lead is modest. A neural network was rejected at the planning stage: Kyiv has only ~2.3k alert starts and attack patterns drift |
+| 2 | The forecast comes from LightGBM. The probabilistic algorithm (frequency table, decision 20) and the baselines are kept for comparison and explanation | LightGBM was chosen on validation, where it had the best PR-AUC and Brier score in both tasks and for both training periods. The test period did not confirm that it is better than the simple methods. On "start" its lead over a logistic regression on region flags is +1.8 points of PR-AUC in the default mode (95% interval −3.0 … +7.0) and +0.4 on full history (−5.5 … +5.9): the two cannot be told apart on this test. On "end", at the agreed threshold, its "yes" is less precise than that of the duration curve by 6.8 points (−12.3 … −1.6). See "Uncertainty of the test results". LightGBM stays because the choice was frozen before the test; what can be said in its favour is narrower than it looked: it uses all the features, including raions and "minutes since" values that are empty when a region is quiet, and it was never worse than the regression by a margin that the test could detect on "start". Cost: its answers are harder to explain than a table cell or a regression weight. A neural network was rejected at the planning stage: Kyiv has only ~2.3k alert starts and attack patterns drift |
 | 3 | Historical data: `official_data_uk.csv` from [Vadimkin/ukrainian-air-raid-sirens-dataset](https://github.com/Vadimkin/ukrainian-air-raid-sirens-dataset) (MIT; attribution and licence text in [DATA_LICENSE.md](DATA_LICENSE.md)) | Official source, starts 2022-03-15, Kyiv city is a separate region. Volunteer data rejected as riskier |
 | 4 | Aggregation to oblast: an oblast is under alert if **at least one** of its raions or hromadas is | The data mixes levels (oblast / raion / hromada), raion-level dominates from 2025. The rule gives one representation for all years |
 | 5 | Alerts separated by a short pause are **not merged** | Merging would distort the data and the "start" target |
@@ -475,7 +475,7 @@ One pass over 1 July – 6 September 2026 with the frozen protocol; produced by 
 Reference: saying "yes" always gives 5.5% precision.
 
 - **The forecast held up.** In the default mode the program warned of 64% of the alerts, said "yes" 11.7% of the quiet time, and about one "yes" in six was right — more than three times the base rate. Recall came out at 38.4% against the 40% target: the threshold transferred well.
-- **LightGBM is the best by PR-AUC, but not by much.** Its lead over the logistic regression is 1.8 points in the default mode and 0.4 points on full history. With 171 alerts in one 68-day period this is not enough to claim that LightGBM is better than the regression on new data. Its advantage on validation (14.3% against 11.3%) shrank on the test.
+- **LightGBM is the best by PR-AUC, but not by much.** Its lead over the logistic regression is 1.8 points in the default mode and 0.4 points on full history. The bootstrap below shows that a difference of this size is well within chance, so LightGBM cannot be claimed to be better than the regression on new data. Its advantage on validation (14.3% against 11.3%) shrank on the test.
 - **The default mode was not the better one on the test** (18.9% against 19.8%). It was named before the test and stays the default; the difference is within the seed noise measured earlier.
 - **The frequency table does better than expected at its threshold**: the highest precision among the simple methods (23.6%) at a somewhat lower recall.
 - The probabilities are too low on average (3.6% predicted against 5.5% observed): the test period is more intense than anything the models were trained on.
@@ -501,7 +501,44 @@ Reference: saying "yes" always gives 5.5% precision.
 
 ![Test, calibration](reports/figures/test_calibration.png)
 
-**How far these numbers can be trusted.** One test period of 68 days with 171 alerts; neighbouring 5-minute points are near-copies, so the effective sample is much smaller than the point counts suggest. No confidence intervals were computed. The validation period was used for many choices (feature cap, settings, thresholds), so validation numbers are optimistic; the gap between validation and test on "end" shows by how much they can be.
+### Uncertainty of the test results
+
+One test period of 68 days with 171 alerts; neighbouring 5-minute points are near-copies, so the effective sample is much smaller than the point counts suggest. To see how much of the differences could be chance, the test forecasts were resampled with a paired block bootstrap: [scripts/bootstrap.py](scripts/bootstrap.py), output in [reports/bootstrap_output.txt](reports/bootstrap_output.txt) and [reports/bootstrap.csv](reports/bootstrap.csv).
+
+Method: the period is cut into day-long blocks starting at 12:00 Kyiv time, so that a night attack stays in one block (69 blocks for "start", 54 with a Kyiv alert for "end"). Blocks are drawn with replacement 2,000 times, and both models of a comparison are scored on the same draw. The interval is the 2.5th to 97.5th percentile. The rule was set before the run: if the interval of a difference contains zero, the two are reported as not distinguishable on this test.
+
+Nothing was tuned or re-chosen. LightGBM was loaded from `models/`. The two baselines had not been saved, so they were fitted again by the same deterministic procedure; the script checks that every reproduced metric equals the published one and stops otherwise.
+
+| "Start", PR-AUC | Value | 95% interval | Verdict |
+|---|---|---|---|
+| LightGBM, from 2024-07 | 18.9% | 13.0 … 26.7 | |
+| Logistic regression, from 2024-07 | 17.1% | 11.2 … 24.5 | |
+| LightGBM − logistic regression, from 2024-07 | +1.8 | −3.0 … +7.0 | not distinguishable |
+| LightGBM, full history | 19.8% | 13.7 … 27.6 | |
+| Logistic regression, full history | 19.4% | 12.3 … 28.2 | |
+| LightGBM − logistic regression, full history | +0.4 | −5.5 … +5.9 | not distinguishable |
+| LightGBM: from 2024-07 − full history | −0.9 | −2.4 … +1.2 | not distinguishable |
+| Logistic regression: from 2024-07 − full history | −2.3 | −5.2 … +0.5 | not distinguishable |
+
+| "End", precision of "yes" at the frozen thresholds | Value | 95% interval | Verdict |
+|---|---|---|---|
+| LightGBM, from 2024-07 | 45.2% | 38.4 … 53.5 | the 60% target is outside the interval |
+| Duration curve, from 2024-07 | 52.0% | 44.0 … 60.0 | |
+| LightGBM − duration curve, from 2024-07 | −6.8 | −12.3 … −1.6 | LightGBM is worse |
+| LightGBM, full history | 44.8% | 38.0 … 53.1 | the 60% target is outside the interval |
+| LightGBM − duration curve, full history | −7.2 | −12.5 … −2.0 | LightGBM is worse |
+| LightGBM: from 2024-07 − full history | +0.4 | −0.0 … +0.9 | not distinguishable |
+| Always "yes" (base rate) | 41.1% | 33.7 … 50.2 | |
+| LightGBM, from 2024-07 − always "yes" | +4.1 | +0.3 … +9.6 | slightly better than always "yes" |
+
+What this says:
+
+- **"Start": both LightGBM and the logistic regression are clearly useful** (even the lower ends, 11–14%, are more than twice the 5.5% base rate), **but they cannot be ranked.** The same holds for the two training periods. The intervals are wide: the measured PR-AUC of 18.9% could plausibly have been anywhere from 13% to 27%.
+- **"End": the miss is real, not bad luck.** The whole interval for LightGBM lies below the 60% target, and LightGBM's "yes" is less precise than the duration curve's. The two say "yes" at very different rates (88% against 49% of alert time), so this compares the two answers the program could give, not the models at equal recall.
+
+What the method does not show: the spread from retraining the models, and whether a future period will behave like this one. The days are also not fully independent — attack waves last several days — so the intervals are more likely too narrow than too wide.
+
+The validation period was used for many choices (feature cap, settings, thresholds), so validation numbers are optimistic; the gap between validation and test on "end" shows by how much they can be.
 
 ## Known limitations
 
@@ -553,6 +590,8 @@ Who corrected whom and what changed.
 | Author → Claude | The debug panel listed "main features of the model" next to a forecast, which read as the reasons for that forecast | It is the model's global importance by gain, the same for every forecast; renamed and labelled as such at the author's request |
 | Author → Claude | The list of oblasts adjacent to Kyiv oblast was written by Claude from memory and never checked | Checked against a source at the author's request: Zhytomyr, Vinnytsia, Cherkasy, Poltava and Chernihiv — the list was right, nothing changes in the baselines or the frequency table |
 | Author → Claude | README still said "shows a map", counted 23 tests, and a docstring said the program is "not left running" | The author listed the stale places; Claude re-read the whole README against the code and fixed these and others (regenerated output files that no longer matched their tables, the section order) |
+| Author → Claude | The test results were reported as point values; README said that no confidence intervals had been computed | The author asked for a resampling of the test forecasts and approved the method before any code was written. Result: LightGBM and the logistic regression cannot be told apart on "start"; the miss on "end" is real |
+| Author → Claude | Decision 2 said "Measured, not assumed" about LightGBM's advantage, citing validation only | Rewritten from the bootstrap: the advantage was not confirmed on the test (+1.8 points, interval −3.0 … +7.0), and on "end" LightGBM's answer is worse than the baseline's |
 
 ## Stack
 
@@ -575,4 +614,4 @@ Possible extensions:
 ## Licences
 
 - Data: `official_data_uk.csv` is © 2022 Vadym Klymenko, MIT License. Attribution and the full licence text are in [DATA_LICENSE.md](DATA_LICENSE.md).
-- Code of this project: no licence chosen yet.
+- Code of this project: MIT License, see [LICENSE](LICENSE).

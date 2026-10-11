@@ -1,0 +1,18 @@
+task,metric,what,point,ci_low,ci_high,share_above_0,ci_contains_0
+start,PR-AUC,"LightGBM, from 2024-07",18.882823322160636,12.9583915500669,26.709722420102754,,
+start,PR-AUC,"logistic regression, from 2024-07",17.09106516361623,11.22186475758924,24.54578834102022,,
+start,PR-AUC,"LightGBM - logistic regression, from 2024-07",1.7917581585444071,-3.0140068173875427,7.024950829433562,0.788,True
+start,PR-AUC,"LightGBM, full history",19.756300888389593,13.653395139459402,27.62374035317133,,
+start,PR-AUC,"logistic regression, full history",19.373946842323498,12.322257140742568,28.218706526700394,,
+start,PR-AUC,"LightGBM - logistic regression, full history",0.382354046066094,-5.502936876338657,5.910036345258785,0.5875,True
+start,PR-AUC,LightGBM from 2024-07 - LightGBM full history,-0.8734775662289557,-2.3656879855035036,1.1636022072322811,0.1805,True
+start,PR-AUC,logistic regression from 2024-07 - logistic regression full history,-2.2828816787072688,-5.236574166639219,0.5174643307811968,0.056,True
+end,precision of yes,"LightGBM, from 2024-07",45.174659561870925,38.38711180710068,53.49805975274725,,
+end,precision of yes,"duration curve, from 2024-07",51.97860962566845,44.02740046838407,60.0455580997585,,
+end,precision of yes,"LightGBM - duration curve, from 2024-07",-6.8039500637975205,-12.317308780003193,-1.632271015755144,0.0025,False
+end,precision of yes,"LightGBM, full history",44.77434679334917,38.02628762529569,53.06307181633334,,
+end,precision of yes,"duration curve, full history",51.97860962566845,44.02740046838407,60.0455580997585,,
+end,precision of yes,"LightGBM - duration curve, full history",-7.20426283231928,-12.545186984676254,-2.0376098466218346,0.001,False
+end,precision of yes,LightGBM from 2024-07 - LightGBM full history,0.40031276852176,-0.005497244518743727,0.8746649261379567,0.972,True
+end,precision of yes,always yes (base rate),41.09660574412533,33.672562610344606,50.16553102971767,,
+end,precision of yes,"LightGBM, from 2024-07 - always yes",4.0780538177456025,0.3438074990645064,9.563460032935822,0.996,False
