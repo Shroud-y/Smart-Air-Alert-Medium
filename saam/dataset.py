@@ -24,5 +24,5 @@ def period_mask(index, start, end):
 def varying_columns(X_train):
     """Columns that take more than one value in the training rows. A feature
     that is constant in training cannot be learned from and distorts linear
-    models once it starts to vary later (README, decision 19)."""
+    models once it starts to vary later (README, decision 16)."""
     return [c for c in X_train.columns if X_train[c].nunique(dropna=False) > 1]
