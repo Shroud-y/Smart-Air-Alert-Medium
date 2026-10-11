@@ -1,0 +1,55 @@
+Reproduced the published test precision (45.2% and 52.0%); nothing was tuned.
+
+1. Where the threshold rule placed each model (mode from 2024-07; test base rate 41.1%)
+   rule: among thresholds with validation precision >= 60%, take the one with the highest recall
+
+   model            threshold | validation: precision  recall  says yes | test: precision  recall  says yes | PR-AUC validation -> test
+   LightGBM            0.223 |                  60.0    88.2      68.1 |            45.2    97.0      88.2 | 76.2 -> 55.9
+   duration curve      0.393 |                  60.7    70.7      54.0 |            52.0    61.8      48.8 | 60.8 -> 50.9
+
+2. The two answers at the same selectiveness on the test
+   LightGBM's threshold is moved so that it says yes exactly as often as the duration curve does.
+   This uses the forecasts only, not the outcomes, so it is not a tuned result - but it is not the frozen program either.
+
+   duration curve, frozen threshold   precision  52.0%   endings caught  61.8%   says yes  48.8%
+   LightGBM, same share of yes        precision  50.6%   endings caught  60.1%   says yes  48.8%
+   LightGBM, frozen threshold         precision  45.2%   endings caught  97.0%   says yes  88.2%
+   LightGBM at the same share of yes minus duration curve: -1.4 points, 95% interval -12.1 .. +9.2 (day-block bootstrap, 2,000 draws)
+
+3. LightGBM's precision along its own curve on the test (the price of being permissive)
+   says yes for the top  10% of moments: precision  65.1%   endings caught  15.9%
+   says yes for the top  25% of moments: precision  54.7%   endings caught  33.3%
+   says yes for the top  49% of moments: precision  50.5%   endings caught  60.2%
+   says yes for the top  68% of moments: precision  48.6%   endings caught  80.4%
+   says yes for the top  88% of moments: precision  45.2%   endings caught  96.7%
+   says yes for the top 100% of moments: precision  41.1%   endings caught 100.0%
+
+4. Did the probabilities shift? (mean forecast against observed frequency, test)
+   LightGBM        mean forecast 54.8%, observed 41.1%; share of moments above its threshold 88.2% (validation: 68.1%)
+   duration curve  mean forecast 37.2%, observed 41.1%; share of moments above its threshold 48.8% (validation: 54.0%)
+
+5. What LightGBM leans on, and whether it still means the same
+   top features of the final model: poltava_newest_min 16.4%, chernihiv_newest_min 13.7%, cherkasy_oldest_min 7.3%, chernihiv_oldest_min 6.4%, poltava_oldest_min 5.8%, hour_cos 4.9%
+
+   during a Kyiv alert, by period:               train  validation        test
+   alert ends within 30 min, %                    31.6        46.3        41.1
+   Chernihiv under alert, %                       94.1        96.8        88.8
+   Chernihiv: newest alert < 30 min old, %        11.4        27.4        28.2
+   Poltava under alert, %                         87.4        79.6        76.8
+   Kyiv alert already lasts > 60 min, %           53.2        36.1        40.0
+
+   chance that the Kyiv alert ends within 30 min, by how recently a new alert started in Chernihiv oblast:
+   Chernihiv's newest alert                     train  validation        test   (share of test moments)
+   no alert in Chernihiv                          66.9        71.3        27.4     11.2%
+   started < 30 min ago                           79.5        71.3        54.3     28.2%
+   30-90 min ago                                  48.8        47.6        45.1     28.1%
+   90-180 min ago                                 24.0        35.1        41.9     14.5%
+   180 min ago or more                            18.7        25.8        22.1     18.0%
+
+   the same for the duration curve's only input, how long the Kyiv alert has lasted:
+   Kyiv alert has lasted                        train  validation        test   (share of test moments)
+   < 15 min                                       51.8        61.4        54.6     24.3%
+   15-30 min                                      52.6        62.9        53.4     16.8%
+   30-60 min                                      32.1        46.4        36.3     18.9%
+   60-120 min                                     20.6        26.3        37.5     19.6%
+   > 120 min                                      18.6        26.0        22.8     20.4%

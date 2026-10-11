@@ -19,7 +19,7 @@ A console program that shows where air raid alerts are active in Ukraine and ans
 | "Start": alerts warned / precision of "yes" / PR-AUC | 64% / 18% / 18.9% | 61% / 14% / 17.1% (logistic regression) |
 | "End": precision of "yes", target 60% | 45% | 52% (duration curve) |
 
-**What did not work:** the "end" forecast missed its target and at its threshold is worse than the simple baseline; on "start" LightGBM cannot be told apart from a logistic regression (+1.8 points, 95% interval −3.0 … +7.0). Details in [Test results](#test-results).
+**What did not work:** the "end" forecast missed its target and at its threshold is worse than the simple baseline ([why](#why-the-end-answer-is-worse-than-the-baseline)); on "start" LightGBM cannot be told apart from a logistic regression (+1.8 points, 95% interval −3.0 … +7.0). Details in [Test results](#test-results).
 
 Corrections by the author that changed the result (the full list is in the [Corrections log](#corrections-log)):
 - raised, unprompted, that the dataset is in UTC while Ukraine switches between UTC+2 and UTC+3, so the same UTC hour is a different hour for people; this led to the time handling of decision 7;
@@ -500,10 +500,52 @@ Reference: saying "yes" always gives 5.5% precision.
 
 - **The target was not met.** The agreed rule was that a "yes, it will end" is right at least 60% of the time. On the test it was right 45% of the time, and the program said "yes" during 88% of alert time. At this threshold the forecast is barely better than always saying "yes" (41%), and no method reached 60%.
 - **The model's quality dropped, not only the threshold.** PR-AUC fell from 76% on validation to 56% on the test. In the default mode the Brier score (0.252) is worse than that of the simple duration curve (0.233) and worse than predicting the base rate for every point (0.242). LightGBM still ranks moments better than the baselines (PR-AUC 56–59% against 51%), but its probabilities are too high: 55% predicted on average against 41% observed.
-- **Diagnostics after the fact** (they explain the result and change nothing): the model that was not retrained on validation gives the same 46% precision, so the final retraining is not the cause. Even with hindsight, 60% precision is reachable on the test only for 20–40% of the endings. Alert durations in the test period look like those in validation (median 30 min against 29), so the change is in how the neighbours' state relates to the end of a Kyiv alert.
+- **Diagnostics after the fact** (they explain the result and change nothing): the model that was not retrained on validation gives the same 46% precision, so the final retraining is not the cause. Even with hindsight, 60% precision is reachable on the test only for 20–40% of the endings. Alert durations in the test period look like those in validation (median 30 min against 29), so the change is in how the neighbours' state relates to the end of a Kyiv alert — shown in detail in "Why the 'end' answer is worse than the baseline".
 - **What follows for the program (decision 22):** the "end" answer stays a yes / no, as agreed at the start. Claude proposed showing only the probability; the author kept the binary answer. The measured precision of 45% is stated here and printed under the answer every time the "end" question is shown, so the weakness is in front of the user rather than hidden.
 
 ![Test, calibration](reports/figures/test_calibration.png)
+
+### Why the "end" answer is worse than the baseline
+
+At the frozen thresholds LightGBM's "yes, it will end" was right 45.2% of the time and the duration curve's 52.0%. The reasons were traced with [scripts/end_diagnostics.py](scripts/end_diagnostics.py) (output in [reports/end_diagnostics_output.txt](reports/end_diagnostics_output.txt)). These are diagnostics only: LightGBM is loaded from `models/` and not retrained, nothing is tuned, and the program is unchanged. Default mode, "from 2024-07".
+
+**1. The threshold rule put the two models at very different points.** The rule (decision 21) takes, among thresholds with at least 60% precision on validation, the one that catches the most endings. LightGBM ranked much better on validation, so it could afford a far more permissive threshold and still show 60% there.
+
+| | Threshold | Validation: precision / says "yes" | Test: precision / says "yes" | PR-AUC, validation → test |
+|---|---|---|---|---|
+| LightGBM | 0.223 | 60.0% / 68% | 45.2% / 88% | 76.2% → 55.9% |
+| Duration curve | 0.393 | 60.7% / 54% | 52.0% / 49% | 60.8% → 50.9% |
+
+So the rule rewarded the better validation score with a threshold close to "always yes". An answer that says "yes" 88% of the time cannot be much more precise than the 41% base rate, whatever the model.
+
+**2. At the same selectiveness the two are equal.** If LightGBM's threshold is moved so that it says "yes" exactly as often as the duration curve (49% of alert time; this uses the forecasts only, not the outcomes), its precision is 50.6% against 52.0%: a difference of −1.4 points with a 95% interval of −12.1 … +9.2. LightGBM is not the worse model here; its answer was placed at a worse point.
+
+| LightGBM says "yes" for the top … of moments | 10% | 25% | 49% | 68% | 88% (frozen) | 100% |
+|---|---|---|---|---|---|---|
+| Precision on the test | 65.1% | 54.7% | 50.5% | 48.6% | 45.2% | 41.1% |
+
+**3. The probabilities ran high on the test, which pushed even more moments over the threshold.** LightGBM's mean forecast was 54.8% against 41.1% observed, and the share of moments above its threshold grew from 68% on validation to 88%. The duration curve moved the other way and stayed selective: mean forecast 37.2%, share above its threshold 54% → 49%.
+
+**4. What LightGBM had learned stopped holding.** Its main features are how recently a new alert started in Chernihiv and Poltava oblasts (30% of the model's gain between them). The link between them and the end of a Kyiv alert changed in the test period, while the duration curve's only input stayed stable:
+
+| Chance that the Kyiv alert ends within 30 min | Train | Validation | Test | Share of test moments |
+|---|---|---|---|---|
+| No alert in Chernihiv oblast | 66.9% | 71.3% | **27.4%** | 11% |
+| Chernihiv's newest alert started < 30 min ago | 79.5% | 71.3% | **54.3%** | 28% |
+| … 30–90 min ago | 48.8% | 47.6% | 45.1% | 28% |
+| … 90–180 min ago | 24.0% | 35.1% | 41.9% | 15% |
+| … 180 min ago or more | 18.7% | 25.8% | 22.1% | 18% |
+| Kyiv alert has lasted < 15 min | 51.8% | 61.4% | 54.6% | 24% |
+| … 15–30 min | 52.6% | 62.9% | 53.4% | 17% |
+| … 30–60 min | 32.1% | 46.4% | 36.3% | 19% |
+| … 60–120 min | 20.6% | 26.3% | 37.5% | 20% |
+| … more than 120 min | 18.6% | 26.0% | 22.8% | 20% |
+
+In training and validation "no alert in Chernihiv" or "a fresh alert there" meant the Kyiv alert would end soon in 67–80% of cases; in the test period it was 27% and 54%. The model kept giving high probabilities in exactly these situations. The rows for the duration of the Kyiv alert moved far less, with one exception (60–120 min).
+
+**In one sentence:** the more flexible model looked better on validation, the threshold rule turned that advantage into a very permissive "yes", and when the patterns it relied on shifted, the permissive answer fell to the base rate — while the one-input baseline, kept stricter by the same rule, lost less.
+
+What this does not prove: why the Chernihiv pattern changed. The cells are small (the first row is 11% of 1,915 moments, taken from a few dozen alerts), the test period is one unusually intense summer, and no cause was investigated. A rule that fixes the share of "yes" instead of maximising recall would have been more robust here, but that is hindsight: it was not the agreed rule, and it has not been tested on unused data.
 
 ### Uncertainty of the test results
 
@@ -600,6 +642,7 @@ Who corrected whom and what changed.
 | Author → Claude | The summary and this log credited the author with finding the duplicate rows | The author pointed out that Claude had raised the suspicion and found the duplicates, and that the author had only confirmed it. The log row now reads "Claude, confirmed by author", and the summary lists the UTC and summer-time issue, which the author raised unprompted |
 | Author → Claude | After the program was made to refresh itself (decision 23), Claude wrote that this "reverses the assumption behind decision 18" and called it a contradiction. README then gave "the program is not a monitor" as the reason the all-clear feature was dropped | The author corrected the record: the reason was never the word "monitor" but the length of a session — about half an hour at most — which refreshing the screen does not change. Decisions 18 and 23 and the extensions list were rewritten; there is no contradiction between them |
 | Author → Claude | Two decisions made by the author were missing from the decisions table: the Kyiv hour alone as a feature, and committing the trained models | Added to decision 7 and as decision 24 after the author asked for a check of decisions that had been left out |
+| Author → Claude | README stated that the "end" answer is worse than the baseline but did not explain why | The author asked for the reason. Diagnostics show three links: the threshold rule gave LightGBM a near "always yes" threshold because it looked better on validation; its probabilities ran high on the test; and the Chernihiv pattern it relied on changed. At equal selectiveness the two models are equal (−1.4 points, interval −12.1 … +9.2) |
 
 ## Stack
 
