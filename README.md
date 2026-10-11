@@ -339,6 +339,36 @@ LightGBM is the most precise at the same recall and says "yes" for the least tim
 
 The thresholds are picked on validation. The test period is more intense, so the actual recall and precision there may differ from 40% and 60%.
 
+### Tuning
+
+A small search over LightGBM settings on validation ([scripts/tune.py](scripts/tune.py), output in [reports/tuning_output.txt](reports/tuning_output.txt) and [reports/tuning.csv](reports/tuning.csv)): 20 random combinations of the number of trees (150 / 300 / 600), learning rate (0.02 / 0.05 / 0.1), tree size (7 / 15 / 31 leaves) and minimum leaf size (100 / 300 / 1000), for each of the four models.
+
+**How much is noise.** The first settings were refitted with 5 random seeds. The seed alone moves the "start" PR-AUC by about ±0.5 percentage points (12.3–13.5% for full history, 11.8–13.3% for the recent period). This confirms that the earlier 12.5% against 12.8% between the two training periods was noise, and it sets the bar for any claimed improvement. With 20 candidates the best one is expected to look about two such deviations better by luck alone.
+
+**What was adopted.** Not the best candidate of each model, but one setting for all four: 7 leaves instead of 15 and a minimum leaf of 300 instead of 200 — smaller trees. It has the best average rank across the four models and is never the winner by a lucky margin in just one of them. Checked over 5 seeds each:
+
+| Model | PR-AUC before | PR-AUC after | At the operating point, before → after |
+|---|---|---|---|
+| "Start", full history | 12.9% ± 0.5 | 13.6% ± 0.4 | precision 15.4% → 15.4% |
+| "Start", from 2024-07 | 12.6% ± 0.6 | 14.1% ± 0.4 | precision 14.9% → 15.5% |
+| "End", full history | 72.6% ± 0.4 | 72.4% ± 0.3 | recall 82.0% → 85.2% |
+| "End", from 2024-07 | 75.2% ± 0.2 | 76.0% ± 0.2 | recall 86.2% → 87.9% |
+
+The gain is clear for the default mode (from 2024-07): the new setting beats the best seed of the old one in 5 runs out of 5 in both tasks. For full history it is within noise. At the "start" operating point almost nothing changes: the ranking improved mostly in parts of the curve away from recall 40%. So tuning made the probabilities somewhat better and the yes / no answer barely different.
+
+What the search also showed: large trees with many boosting rounds are the worst (PR-AUC down to 8–10% on "start") — the model memorises the training period.
+
+### Frozen before the test
+
+Everything that affects the test result was fixed, and committed, before the test period was opened. Nothing in this list is changed afterwards.
+
+1. Features: 112, region minutes capped at 180 (decisions 13, 18, 19).
+2. Model: LightGBM with the settings from "Tuning". The final model is the average of 5 models that differ only in the random seed — this removes the ±0.5 points of seed noise found during tuning.
+3. Modes: "from 2024-07" (default) and "full history" (decision 14).
+4. Thresholds: recall ≥ 40% for "start", precision ≥ 60% for "end" (decision 21). Their values are computed on validation for models trained on the training period only, and are not adjusted on the test.
+5. Final training on train + validation, up to 30 June 2026 (decision 15).
+6. Test: 1 July – 6 September 2026, opened once. Both modes, the baselines and the frequency table are reported, each with a threshold picked on validation by the same rule.
+
 **Time split** (no shuffling, gap ≥ `H` between parts)
 
 | Part | Period | Kyiv alert starts |
@@ -403,6 +433,7 @@ Who corrected whom and what changed.
 | Author → Claude | Claude proposed fixing the training period to "from 2024-07" for both tasks | The author did not trust a choice made on a margin within noise and kept both periods as modes of the program. Claude added one condition: the default mode is named before the test set is opened, so that it is not picked by its test score |
 | Author → Claude | Thresholds were picked by the best F1, a formal rule Claude used by default | The author set the principle — better an extra warning than a missed alert — and chose recall 40% for "start" and precision 60% for "end" from the measured trade-off; Claude had suggested 50% and 70% |
 | Claude → author | "Better to warn once more" was stated for the program as a whole | For "end" the cautious direction is the opposite: the dangerous mistake is a false promise of an all-clear, so the constraint there is on precision, not recall |
+| Claude → Claude | Compared training periods and settings by a single run each | Refitting with 5 seeds showed ±0.5 points of pure chance on "start"; from then on settings are compared over several seeds, and one shared setting was adopted instead of four separate winners |
 
 ## Stack
 
@@ -413,7 +444,7 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich
 1. ~~EDA~~ — done, see "Exploratory analysis".
 2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features, 18 tests.
 3. ~~Baselines and metrics~~ — done, see "Baseline results".
-4. Probabilistic algorithm and LightGBM, comparison — first versions done, see "Model results". Left: tuning LightGBM, then the final retraining of both modes and the test.
+4. Probabilistic algorithm and LightGBM, comparison — first versions done, see "Model results". Tuning done, see "Tuning". Left: the final retraining of both modes and the test.
 5. Ubilling client, `--replay` mode.
 6. Console interface: map, forecast, `--debug` panel.
 

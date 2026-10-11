@@ -1,0 +1,67 @@
+  done start / full history in 127s total
+  done start / from 2024-07 in 194s total
+  done end / full history in 226s total
+  done end / from 2024-07 in 246s total
+
+== START / full history   (at_point = precision at recall 40%)
+  current settings over 5 seeds: PR-AUC 12.85% +- 0.45% (min 12.31%, max 13.53%); at_point 15.4% +- 0.4%
+  current, seed 0: PR-AUC 12.85%, Brier 0.0302, at_point 16.0%
+  best candidate:  PR-AUC 14.08%, Brier 0.0300, at_point 14.9%  -> gain +1.23% = +2.7 seed-sd
+  top 5 by PR-AUC:
+    n_estimators  learning_rate  num_leaves  min_child_samples  pr_auc  brier  at_point
+             300           0.05           7                300   14.08 0.0300      14.9
+             150           0.10           7               1000   13.81 0.0299      15.6
+             600           0.02           7               1000   13.69 0.0299      15.6
+             150           0.02           7                300   13.67 0.0299      14.8
+             150           0.02           7               1000   13.64 0.0299      14.8
+  worst candidate: PR-AUC 10.08% ({'n_estimators': np.int64(600), 'learning_rate': np.float64(0.1), 'num_leaves': np.int64(15), 'min_child_samples': np.int64(100)})
+
+== START / from 2024-07   (at_point = precision at recall 40%)
+  current settings over 5 seeds: PR-AUC 12.56% +- 0.61% (min 11.78%, max 13.33%); at_point 14.9% +- 0.2%
+  current, seed 0: PR-AUC 12.49%, Brier 0.0302, at_point 15.0%
+  best candidate:  PR-AUC 14.57%, Brier 0.0298, at_point 15.9%  -> gain +2.08% = +3.4 seed-sd
+  top 5 by PR-AUC:
+    n_estimators  learning_rate  num_leaves  min_child_samples  pr_auc  brier  at_point
+             600           0.02           7               1000   14.57 0.0298      15.9
+             300           0.05           7                300   14.54 0.0298      16.2
+             150           0.05          31               1000   14.31 0.0299      15.1
+             150           0.02           7                300   14.27 0.0298      15.4
+             150           0.02           7               1000   14.05 0.0298      14.8
+  worst candidate: PR-AUC 8.19% ({'n_estimators': np.int64(600), 'learning_rate': np.float64(0.1), 'num_leaves': np.int64(15), 'min_child_samples': np.int64(100)})
+
+== END / full history   (at_point = recall at precision 60%)
+  current settings over 5 seeds: PR-AUC 72.61% +- 0.43% (min 72.23%, max 73.09%); at_point 82.0% +- 0.8%
+  current, seed 0: PR-AUC 72.23%, Brier 0.2098, at_point 81.0%
+  best candidate:  PR-AUC 72.91%, Brier 0.2057, at_point 86.8%  -> gain +0.67% = +1.6 seed-sd
+  top 5 by PR-AUC:
+    n_estimators  learning_rate  num_leaves  min_child_samples  pr_auc  brier  at_point
+             150           0.05          15                100   72.91 0.2057      86.8
+             600           0.02          15                100   72.85 0.2075      82.9
+             150           0.05          31               1000   72.76 0.2077      83.8
+             300           0.02          15               1000   72.57 0.2084      83.2
+             300           0.05           7                300   72.57 0.2092      84.9
+  worst candidate: PR-AUC 68.24% ({'n_estimators': np.int64(300), 'learning_rate': np.float64(0.1), 'num_leaves': np.int64(31), 'min_child_samples': np.int64(300)})
+
+== END / from 2024-07   (at_point = recall at precision 60%)
+  current settings over 5 seeds: PR-AUC 75.17% +- 0.20% (min 74.88%, max 75.43%); at_point 86.2% +- 1.2%
+  current, seed 0: PR-AUC 75.14%, Brier 0.1940, at_point 86.2%
+  best candidate:  PR-AUC 76.41%, Brier 0.1862, at_point 88.2%  -> gain +1.26% = +6.4 seed-sd
+  top 5 by PR-AUC:
+    n_estimators  learning_rate  num_leaves  min_child_samples  pr_auc  brier  at_point
+             150           0.02           7                300   76.41 0.1862      88.2
+             150           0.05          15                100   76.19 0.1875      87.6
+             150           0.05          31               1000   76.14 0.1872      89.6
+             300           0.05           7                300   75.98 0.1896      87.6
+             600           0.02          15                100   75.98 0.1895      86.9
+  worst candidate: PR-AUC 72.88% ({'n_estimators': np.int64(600), 'learning_rate': np.float64(0.1), 'num_leaves': np.int64(15), 'min_child_samples': np.int64(100)})
+
+== average PR-AUC rank of each setting across the four models (1 = best)
+                                                         mean   max
+n_estimators learning_rate num_leaves min_child_samples            
+300          0.05          7          300                 3.0   5.0
+150          0.02          7          300                 5.0  11.0
+600          0.02          7          1000                5.2  10.0
+150          0.05          31         1000                5.5  13.0
+             0.10          7          1000                5.5   7.0
+600          0.02          15         100                 5.8   9.0
+  current settings: {'n_estimators': 300, 'learning_rate': 0.05, 'num_leaves': 15, 'min_child_samples': 200}

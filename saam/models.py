@@ -3,14 +3,15 @@ import lightgbm as lgb
 
 from .dataset import varying_columns
 
-# First, untuned settings. Deliberately conservative: few leaves and large
-# leaves, because positives are rare and neighbouring grid points are near-copies.
+# Chosen by a small search on validation (scripts/tune.py; README, "Tuning").
+# One setting for all four models: small trees and large leaves, because
+# positives are rare and neighbouring grid points are near-copies.
 LGBM_PARAMS = dict(
     objective="binary",
     n_estimators=300,
     learning_rate=0.05,
-    num_leaves=15,
-    min_child_samples=200,
+    num_leaves=7,
+    min_child_samples=300,
     subsample=0.8,
     subsample_freq=1,
     colsample_bytree=0.8,

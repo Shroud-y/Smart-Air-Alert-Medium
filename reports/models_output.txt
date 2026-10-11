@@ -6,20 +6,20 @@
 model                 train                                                                                         
 baseline: StateLogReg full history     9.7  0.0310      0.112       14.7    33.0  20.3        7.4               1.96
 frequency table       full history    10.0  0.0306      0.081       13.7    41.8  20.6       10.0               2.29
-LightGBM              full history    12.8  0.0302      0.150       20.9    29.4  24.4        4.6               2.07
+LightGBM              full history    14.1  0.0300      0.152       19.9    30.4  24.1        5.0               2.19
 baseline: StateLogReg from 2024-07    11.3  0.0304      0.147       17.9    27.9  21.8        5.1               1.49
 frequency table       from 2024-07     9.9  0.0305      0.077       13.8    42.9  20.8       10.2               2.12
-LightGBM              from 2024-07    12.5  0.0302      0.115       19.6    30.8  23.9        5.2               2.39
+LightGBM              from 2024-07    14.5  0.0298      0.130       21.1    29.2  24.5        4.5               1.88
 
 == START: at the agreed operating point (recall >= 40%), threshold picked on validation
                                     threshold  precision_%  recall_%  says_yes_%  false_yes_per_day  alerts_warned_%
 model                 train                                                                                         
 baseline: StateLogReg full history      0.091         12.2      40.0        10.7               2.82             54.2
 frequency table       full history      0.083         13.7      40.2         9.6               2.29             53.1
-LightGBM              full history      0.095         16.0      40.0         8.2               3.20             57.0
+LightGBM              full history      0.098         14.9      40.0         8.8               3.04             56.0
 baseline: StateLogReg from 2024-07      0.112         13.4      40.6         9.9               2.24             52.7
 frequency table       from 2024-07      0.080         13.6      40.1         9.7               2.19             52.7
-LightGBM              from 2024-07      0.071         15.0      40.0         8.8               3.64             54.5
+LightGBM              from 2024-07      0.077         16.2      40.0         8.1               2.79             54.9
 
   frequency table (from 2024-07): 64 cells, overall rate 3.35%; n = training points, k = followed by the event
            Kyiv oblast adjacent oblasts    time of day      n      k   raw     p
@@ -37,14 +37,14 @@ LightGBM              from 2024-07      0.071         15.0      40.0         8.8
    63            quiet       0 adjacent    night 22-06  15945  171.0   1.1   1.1
 
   feature importance, share of gain (full history):
-   kyiv_oblast_on 12.8%, kyiv_oblast_share 10.5%, poltava_share 4.4%, chernihiv_share 4.2%, hour_cos 3.9%, hour_sin 3.3%, kharkiv_oldest_min 3.3%, dnipropetrovsk_newest_min 3.1%, dnipropetrovsk_oldest_min 2.9%, chernihiv_oldest_min 2.7%, odesa_oldest_min 2.4%, chernihiv_newest_min 2.3%
-   by group: Kyiv oblast and its raions 28.7%, Kyiv city itself 0.0%, calendar 11.0%, region count 2.0%, other regions 58.2%
-   by feature kind (regions only): _on 15.6%, _share 22.3%, _newest_min 23.6%, _oldest_min 24.8%
+   kyiv_oblast_share 16.2%, kyiv_oblast_on 13.5%, poltava_share 6.4%, chernihiv_share 5.6%, kharkiv_oldest_min 4.2%, chernihiv_oldest_min 3.3%, dnipropetrovsk_newest_min 3.3%, hour_cos 3.1%, regions_on 3.0%, odesa_oldest_min 3.0%, dnipropetrovsk_oldest_min 2.4%, ko_brovary_min 2.3%
+   by group: Kyiv oblast and its raions 34.9%, Kyiv city itself 0.0%, calendar 7.7%, region count 3.0%, other regions 54.3%
+   by feature kind (regions only): _on 17.0%, _share 30.7%, _newest_min 19.1%, _oldest_min 22.1%
 
   feature importance, share of gain (from 2024-07):
-   kyiv_oblast_on 16.4%, kyiv_oblast_share 12.6%, chernihiv_oldest_min 3.8%, hour_cos 3.7%, dow_kyiv 3.5%, chernihiv_share 3.2%, kyiv_oblast_newest_min 2.9%, donetsk_newest_min 2.8%, hour_sin 2.7%, zaporizhzhia_newest_min 2.6%, sumy_oldest_min 2.5%, sumy_newest_min 2.5%
-   by group: Kyiv oblast and its raions 37.8%, Kyiv city itself 0.0%, calendar 11.5%, region count 1.3%, other regions 49.4%
-   by feature kind (regions only): _on 17.8%, _share 20.3%, _newest_min 25.9%, _oldest_min 19.6%
+   kyiv_oblast_on 24.3%, kyiv_oblast_share 16.9%, chernihiv_share 5.1%, chernihiv_oldest_min 4.4%, kyiv_oblast_newest_min 3.8%, hour_cos 2.4%, zaporizhzhia_newest_min 2.4%, dow_kyiv 2.3%, chernihiv_newest_min 2.0%, sumy_oldest_min 1.8%, donetsk_newest_min 1.7%, hour_sin 1.6%
+   by group: Kyiv oblast and its raions 50.8%, Kyiv city itself 0.0%, calendar 7.5%, region count 1.2%, other regions 40.5%
+   by feature kind (regions only): _on 25.6%, _share 25.8%, _newest_min 20.6%, _oldest_min 16.2%
   [y_end, full history] train rows 26646, positives 9632, features 112, constant and left out: 0
   [y_end, from 2024-07] train rows 13417, positives 4244, features 110, constant and left out: 2
 
@@ -53,20 +53,20 @@ LightGBM              from 2024-07      0.071         15.0      40.0         8.8
 model                   train                                                                                         
 baseline: DurationCurve full history    60.6  0.2355      0.324       57.7    79.6  66.9       63.9               0.21
 frequency table         full history    63.4  0.2298      0.324       57.0    82.1  67.3       66.8               0.23
-LightGBM                full history    72.2  0.2098      0.216       58.7    86.0  69.8       67.9               0.27
+LightGBM                full history    72.6  0.2092      0.185       58.1    89.9  70.6       71.7               0.25
 baseline: DurationCurve from 2024-07    60.8  0.2309      0.223       56.5    82.4  67.0       67.6               0.18
 frequency table         from 2024-07    64.5  0.2238      0.282       57.0    82.1  67.3       66.8               0.23
-LightGBM                from 2024-07    75.1  0.1940      0.259       61.7    83.5  70.9       62.7               0.22
+LightGBM                from 2024-07    76.0  0.1896      0.270       62.5    84.8  71.9       62.9               0.21
 
 == END: at the agreed operating point (precision >= 60%), threshold picked on validation
                                       threshold  precision_%  recall_%  says_yes_%
 model                   train                                                     
 baseline: DurationCurve full history      0.395         60.7      70.7        54.0
 frequency table         full history      0.354         61.9      67.6        50.5
-LightGBM                full history      0.248         60.0      81.0        62.5
+LightGBM                full history      0.219         60.0      84.9        65.5
 baseline: DurationCurve from 2024-07      0.393         60.7      70.7        54.0
 frequency table         from 2024-07      0.343         62.5      65.7        48.7
-LightGBM                from 2024-07      0.218         60.0      86.2        66.6
+LightGBM                from 2024-07      0.232         60.0      87.6        67.6
 
   frequency table (from 2024-07): 33 cells, overall rate 31.63%; n = training points, k = followed by the event
       Kyiv alert lasts         Kyiv oblast    time of day     n      k   raw     p
@@ -84,11 +84,11 @@ LightGBM                from 2024-07      0.218         60.0      86.2        66
    32        > 120 min  oblast under alert    night 22-06  3565  531.0  14.9  15.1
 
   feature importance, share of gain (full history):
-   poltava_newest_min 13.1%, kharkiv_oldest_min 6.2%, hour_cos 5.1%, chernihiv_newest_min 5.0%, hour_sin 4.6%, chernihiv_oldest_min 4.3%, poltava_oldest_min 4.0%, hour_kyiv 2.5%, kyiv_on_min 2.4%, regions_on 2.3%, cherkasy_oldest_min 2.1%, zakarpattia_newest_min 2.1%
-   by group: Kyiv oblast and its raions 6.9%, Kyiv city itself 2.4%, calendar 13.6%, region count 2.3%, other regions 74.8%
-   by feature kind (regions only): _on 2.6%, _share 3.5%, _newest_min 40.1%, _oldest_min 33.1%
+   poltava_newest_min 16.3%, kharkiv_oldest_min 8.5%, chernihiv_newest_min 5.8%, hour_cos 5.5%, chernihiv_oldest_min 5.2%, poltava_oldest_min 5.0%, hour_sin 4.0%, zakarpattia_newest_min 3.0%, hour_kyiv 2.8%, kherson_oldest_min 2.4%, mykolaiv_oldest_min 2.3%, dnipropetrovsk_newest_min 2.2%
+   by group: Kyiv oblast and its raions 5.8%, Kyiv city itself 1.7%, calendar 12.9%, region count 1.9%, other regions 77.8%
+   by feature kind (regions only): _on 2.2%, _share 3.4%, _newest_min 39.5%, _oldest_min 36.5%
 
   feature importance, share of gain (from 2024-07):
-   chernihiv_newest_min 19.2%, poltava_newest_min 8.2%, chernihiv_oldest_min 7.8%, hour_cos 4.9%, hour_sin 3.9%, kyiv_on_min 3.6%, regions_on 3.2%, donetsk_newest_min 2.8%, ko_vyshhorod_min 2.6%, cherkasy_oldest_min 1.9%, sumy_newest_min 1.9%, zhytomyr_newest_min 1.9%
-   by group: Kyiv oblast and its raions 8.8%, Kyiv city itself 3.6%, calendar 11.8%, region count 3.2%, other regions 72.7%
-   by feature kind (regions only): _on 3.4%, _share 3.4%, _newest_min 47.9%, _oldest_min 23.4%
+   chernihiv_newest_min 18.8%, chernihiv_oldest_min 14.4%, poltava_newest_min 10.3%, hour_cos 5.7%, ko_vyshhorod_min 3.5%, regions_on 3.3%, kyiv_on_min 3.1%, hour_sin 2.9%, sumy_newest_min 2.5%, cherkasy_oldest_min 2.3%, poltava_oldest_min 2.0%, zhytomyr_newest_min 1.7%
+   by group: Kyiv oblast and its raions 8.9%, Kyiv city itself 3.1%, calendar 10.6%, region count 3.3%, other regions 74.1%
+   by feature kind (regions only): _on 3.6%, _share 3.1%, _newest_min 44.9%, _oldest_min 28.2%
