@@ -125,3 +125,60 @@ def test_watch_keeps_the_last_screen_when_an_update_fails():
 def test_replay_stops_at_the_end_of_the_dataset():
     done, _, text = _watch({"replay": "2026-09-07 08:20", "step": 5}, max_ticks=20)
     assert done < 20 and "replay finished" in text
+
+
+def _screen(when, debug):
+    import io
+
+    from rich.console import Console
+
+    from saam.ui import render
+
+    snap = from_history(load_alerts(), pd.Timestamp(when, tz="UTC"))
+    fc = forecast(snap, "recent")
+    console = Console(file=io.StringIO(), force_terminal=True, width=120, record=True)
+    console.print(render(snap, fc, debug=debug))
+    return snap, fc, " ".join(console.export_text().replace("│", " ").split())  # undo wrapping inside panels
+
+
+END_MOMENT, START_MOMENT = "2026-08-27 17:30", "2026-08-27 20:40"  # UTC: during a Kyiv alert / between alerts
+CAVEAT = 'Weak hint: on the test period a "yes" was right only 45% of the time (target 60%).'
+
+
+@pytest.mark.skipif(not (MODEL_DIR / "thresholds.json").exists(), reason="models are not built; run scripts/final.py")
+@pytest.mark.parametrize("debug", [False, True])
+def test_end_forecast_always_shows_its_test_precision_under_the_answer(debug, capsys):
+    import saam.__main__ as M
+
+    snap, fc, text = _screen(END_MOMENT, debug)
+    assert fc.task == "end" and fc.caveat == CAVEAT
+    assert text.count("right only 45% of the time") == 1  # shown once, with or without --debug
+
+    M.print_plain(snap, fc, debug)
+    assert capsys.readouterr().out.count("right only 45% of the time") == 1
+
+
+@pytest.mark.skipif(not (MODEL_DIR / "thresholds.json").exists(), reason="models are not built; run scripts/final.py")
+def test_start_forecast_has_no_caveat_and_reports_quality_only_in_debug(capsys):
+    import saam.__main__ as M
+
+    snap, fc, text = _screen(START_MOMENT, False)
+    assert fc.task == "start" and fc.caveat is None
+    assert "on the test period" not in text
+    assert "64% of alerts were warned of" in _screen(START_MOMENT, True)[2]
+
+    M.print_plain(snap, fc, False)
+    assert "on the test period" not in capsys.readouterr().out
+
+
+@pytest.mark.skipif(not (MODEL_DIR / "thresholds.json").exists(), reason="models are not built; run scripts/final.py")
+def test_debug_names_the_feature_list_as_global_importance(capsys):
+    import saam.__main__ as M
+
+    snap, fc, text = _screen(START_MOMENT, True)
+    assert "Global feature importance" in text and "not an explanation of this one" in text
+    assert "Main features" not in text
+
+    M.print_plain(snap, fc, True)
+    out = capsys.readouterr().out
+    assert "global feature importance" in out and "main features" not in out

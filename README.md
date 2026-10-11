@@ -1,6 +1,6 @@
 # SAAM — air raid alert forecast for Kyiv
 
-A contest MVP: a console program that shows a map of current air raid alerts in Ukraine and forecasts, for the **city of Kyiv**:
+A contest MVP: a console program that shows where air raid alerts are active in Ukraine and forecasts, for the **city of Kyiv**:
 
 - if there is no alert — **whether one will start** within the next `H` minutes;
 - if an alert is active — **whether it will end** within the next `H` minutes.
@@ -9,6 +9,22 @@ Default `H` = 30 min. The user-facing output is binary (yes / no); probabilities
 
 > Status: all six steps of the plan are done. The console program runs live and in replay. On the test period the "start" forecast held up; the "end" forecast did not meet its target — see "Test results".
 > This file is extended as the work goes on: decisions, data analysis, changes of mind, corrections in both directions.
+
+## In short
+
+A console program that shows where air raid alerts are active in Ukraine and answers yes / no for the city of Kyiv: will an alert start (or, if one is on, end) within 30 minutes.
+
+| Test period, 1 Jul – 6 Sep 2026, 171 Kyiv alerts | LightGBM (default mode) | Best baseline in the same mode |
+|---|---|---|
+| "Start": alerts warned / precision of "yes" / PR-AUC | 64% / 18% / 18.9% | 61% / 14% / 17.1% (logistic regression) |
+| "End": precision of "yes", target 60% | 45% | 52% (duration curve) |
+
+**What did not work:** the "end" forecast missed its target and at its threshold is worse than the simple baseline; on "start" the lead over a logistic regression is small. Details in [Test results](#test-results).
+
+Corrections by the author that changed the result (the full list is in the [Corrections log](#corrections-log)):
+- found that 38% of the dataset rows were exact duplicates: 1,010 "alerts" in Kyiv in 2022 were really 505;
+- caught that the official data file had stopped updating, which Claude had reported as updated daily;
+- noticed that the 93–100% recall of frontline regions meant only "always under alert", not a signal.
 
 ## How to run
 
@@ -28,10 +44,14 @@ python -m saam --replay "2026-08-27 23:40" --debug
 - `--replay "YYYY-MM-DD HH:MM"` plays the dataset back from that moment (Kyiv time), moving 5 minutes forward every 2 seconds; the dataset ends on 2026-09-07. It works offline and is the fallback if the API is unavailable.
 - `--once` prints a single screen and exits. `--interval SECONDS` and `--step MINUTES` change the refresh rate and the replay step.
 - `--mode recent` (default) uses the model trained from 2024-07, `--mode full` the one trained on the full history.
-- `--debug` adds the probability, the threshold, the measured test quality, the matching cell of the frequency table and the model's main features.
+- `--debug` adds the probability, the threshold, the measured test quality, the matching cell of the frequency table and the model's global feature importance. That list is the same for every forecast (share of the model's total gain over the training data); it is not an explanation of the forecast on screen.
 - `--list` shows the regions under alert as one line instead of the wall; `--plain` prints plain text without colours, once.
 
 ![Console, replay with debug panel](reports/figures/console_replay.svg)
+
+During a Kyiv alert the question changes to "will it end", and the measured weakness of that forecast is always shown under the answer (decision 22):
+
+![Console, replay during a Kyiv alert](reports/figures/console_replay_end.svg)
 
 All regions are shown as a wall of equal bricks, Kyiv city first. Live data colours a brick red (missile threat) or yellow (drone threat); the dataset has no levels, so in replay an alert is simply red. Crimea is never reported by the sources used, and Luhansk oblast is absent from the dataset (permanent alert), so they are shown as "no data". If an update fails while the program is running, the last screen stays and the failure is shown under it.
 
@@ -47,7 +67,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 |---|---|---|
 | 1 | Two separate tasks: alert "start" and alert "end" | A combined target "alert active in N min" is explained almost entirely by an alert simply continuing, which gives misleadingly high metrics |
 | 2 | The forecast comes from LightGBM. The probabilistic algorithm (frequency table, decision 20) and the baselines are kept for comparison and explanation | Measured, not assumed: on validation LightGBM has the best PR-AUC and Brier score in both tasks and for both training periods ("start" 12.5–12.8% against 11.3% for the best baseline and 10.0% for the table; "end" 72–75% against 61% and 64%). It can use all the features, including raions and "minutes since" values that are empty when a region is quiet, and their combinations; the table is limited to three factors. Cost: its answers are harder to explain, and on "start" the lead is modest. A neural network was rejected at the planning stage: Kyiv has only ~2.3k alert starts and attack patterns drift |
-| 3 | Historical data: `official_data_uk.csv` from [Vadimkin/ukrainian-air-raid-sirens-dataset](https://github.com/Vadimkin/ukrainian-air-raid-sirens-dataset) (MIT) | Official source, starts 2022-03-15, Kyiv city is a separate region. Volunteer data rejected as riskier |
+| 3 | Historical data: `official_data_uk.csv` from [Vadimkin/ukrainian-air-raid-sirens-dataset](https://github.com/Vadimkin/ukrainian-air-raid-sirens-dataset) (MIT; attribution and licence text in [DATA_LICENSE.md](DATA_LICENSE.md)) | Official source, starts 2022-03-15, Kyiv city is a separate region. Volunteer data rejected as riskier |
 | 4 | Aggregation to oblast: an oblast is under alert if **at least one** of its raions or hromadas is | The data mixes levels (oblast / raion / hromada), raion-level dominates from 2025. The rule gives one representation for all years |
 | 5 | Alerts separated by a short pause are **not merged** | Merging would distort the data and the "start" target |
 | 6 | Exact duplicate rows are removed by the loading code; the raw CSV in git is not modified | Reproducibility, and the raw file can always be checked against the original |
@@ -62,11 +82,11 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 15 | Validation is widened to January–June 2026; once all choices are fixed, the final model is retrained on train + validation and only then tested | 139 alert starts in the original validation are too few to compare variants reliably; retraining returns the freshest data to the final model. See "Time split" |
 | 16 | No region is removed from the feature set by hand, including Kharkiv, Donetsk and Dnipropetrovsk whose flags carry no signal (lift 1.0). The only filter is technical: a feature that takes a single value in the training period is not given to the model. Features are otherwise revisited only if the final result is unsatisfactory | The author's call: nothing is removed on the basis of one statistic about how useful a region looks. The technical filter was added after the baselines: Kharkiv is under alert 100% of the training time from mid-2024, the logistic regression put half of its intercept on that flag and broke once the flag started to vary. Such a feature cannot be learned from at all, whatever the region. Known risk that remains: with full-history training these flags can act as a hidden clock (Kharkiv was under alert 15% of the time in 2022); the comparison in decision 14 will show whether it matters |
 | 17 | Features and metrics are computed on a 5-minute grid | Five times fewer near-identical rows than a 1-minute grid with the same base rates (2.99% for "start"); one constant in `saam/config.py` |
-| 18 | Features use only a snapshot of the current state: which alerts are active and when they started. Nothing about alerts that have already ended | The live API reports only active alerts, and the program is opened for a quick look, not left running, so it cannot remember earlier events itself. "Minutes since the last Kyiv all-clear" was dropped for this reason, although it carries a moderate signal (1.6–1.9× the base rate in the first hour) |
+| 18 | Features use only a snapshot of the current state: which alerts are active and when they started. Nothing about alerts that have already ended | The live API reports only active alerts, and the program was then meant to be opened for a quick look, not left running, so it could not remember earlier events itself (this assumption was later reversed, see decision 23). "Minutes since the last Kyiv all-clear" was dropped for this reason, although it carries a moderate signal (1.6–1.9× the base rate in the first hour) |
 | 19 | "Minutes since an alert started" features of regions and raions are capped at 180 ("long ago"). The duration of the Kyiv city alert itself is not capped | Found on the first LightGBM run: for a region with a months-long alert the uncapped value is a day counter (one hromada alert in Kharkiv oblast lasted 604 days), and the model learned the calendar date from it. See "Model results" |
 | 20 | The probabilistic algorithm is a table of conditional frequencies over three factors, smoothed towards the overall rate. "Start": state of Kyiv oblast (quiet / alert < 15 / 15–60 / > 60 min) × number of adjacent oblasts under alert (0, 1, 2, 3+) × time of day (4 parts), 64 cells. "End": how long the Kyiv alert has lasted (5 bands) × Kyiv oblast quiet or not × time of day | Every forecast can be read as a sentence ("night, oblast under alert for 20 min, three neighbours — 23%"), which suits the `--debug` panel. Naive Bayes over all flags was rejected: it assumes independent regions, and they are strongly linked |
 | 21 | The yes / no answer is cautious by design, and the caution points in opposite directions for the two tasks. "Start": the threshold must catch at least **40%** of pre-alert moments (recall). "End": a "yes, it will end" must be right at least **60%** of the time (precision) | The author's deliberate choice: an extra warning is better than a missed alert, and a perfect result is not expected from a learning project. For "end" the dangerous mistake is the opposite one — promising an all-clear that does not come. The numbers were chosen from a measured trade-off, see "Operating point"; Claude had proposed 50% and 70% |
-| 22 | The "end" forecast is shown as yes / no like the "start" forecast, although it missed its target on the test (precision 45% instead of 60%) | The author's call: the binary answer was the agreed format from the first message, and one output format for both tasks keeps the program simple. Nothing is re-tuned on the test. The test precision is reported next to the answer in the `--debug` panel |
+| 22 | The "end" forecast is shown as yes / no like the "start" forecast, although it missed its target on the test (precision 45% instead of 60%). Its measured precision is printed under the answer every time, in every output mode | The author's call: the binary answer was the agreed format from the first message, and one output format for both tasks keeps the program simple. Nothing is re-tuned on the test. At first the test precision was visible only with `--debug`; the author moved it under the answer, so that a user who never opens the debug panel still sees that this "yes" is a weak hint. This changes what is displayed, not the model, so the frozen protocol is intact |
 | 23 | The program keeps running and refreshes the screen (about once a minute live; in steps in replay) instead of printing once and exiting | The author's request after seeing the first version. This reverses the assumption behind decision 18 ("opened for a quick look, not left running"), under which the feature "minutes since the last Kyiv all-clear" was dropped. The reason we anyway dropped this feature is because it's useless and cause overengeeniring. That's was my clear decsision as an author, not claude |
 
 ## Data
@@ -213,10 +233,34 @@ The baseline and first model tables below use the threshold with the best F1, wh
 **Baselines**
 
 1. Climatology: frequency of an alert start by Kyiv hour × day of week.
-2. Neighbour rule: "yes" if Kyiv oblast or an adjacent oblast (Chernihiv, Zhytomyr, Cherkasy, Poltava, Vinnytsia) is under alert right now. Two variants are reported next to it: Kyiv oblast alone, and the number of these six regions under alert.
+2. Neighbour rule: "yes" if Kyiv oblast or an adjacent oblast (Chernihiv, Zhytomyr, Cherkasy, Poltava, Vinnytsia — the five Ukrainian oblasts that border it, [source](https://en.wikipedia.org/wiki/Kyiv_Oblast#Geography)) is under alert right now. Two variants are reported next to it: Kyiv oblast alone, and the number of these six regions under alert.
 3. Logistic regression on the yes/no state of every region.
 
 For the "end" task: the empirical duration curve — P(end within `H` min | alert has lasted `t` min).
+
+**Time split** (no shuffling, gap ≥ `H` between parts)
+
+| Part | Period | Kyiv alert starts |
+|---|---|---|
+| Train | 2022-03-15 or 2024-07-01 (decision 14) … 2025-12-31 | 1,819 or 825 |
+| Validation | 2026-01-01 … 2026-06-30 | 277 |
+| Final training (train + validation) | … 2026-06-30 | 2,096 or 1,102 |
+| Test | 2026-07-01 … 2026-09-06 | 171 |
+
+The split was changed after EDA. Options considered:
+
+| Option | Idea | Verdict |
+|---|---|---|
+| 1 | Keep validation at April–June 2026 | Every choice rests on 139 events; a rough error of ±8 percentage points on recall makes the comparison of training periods unreliable |
+| 2 | Widen validation to January–June 2026 | 277 events and both winter and summer in validation, but training loses the 138 freshest alert starts and a third of the raion-level data |
+| **3** | Option 2, then retrain the final model on train + validation | **chosen**: reliable choices and the freshest data in the final model |
+| 4 | Rolling validation over several periods | Most reliable, too much code and time for a two-day MVP |
+
+Procedure: thresholds, hyperparameters, feature set and the training period are chosen on validation. They are then frozen, the model is retrained on train + validation with the same settings, and the test set is opened once.
+
+Cost of option 3: the threshold is picked for a model trained on less data and may be slightly off after retraining; this cannot be checked on anything but the test set.
+
+The test period is not moved even though it is unusually intense: choosing it to get a better number would be dishonest.
 
 ### Baseline results
 
@@ -259,7 +303,7 @@ For reference, the base rate of the "start" task grows with the horizon: 3.9% at
 
 ### Model results
 
-First versions, validation period, same conditions as the baselines; produced by [scripts/models.py](scripts/models.py), full output in [reports/models_output.txt](reports/models_output.txt). LightGBM runs with fixed, untuned settings ([saam/models.py](saam/models.py)).
+First versions, validation period, same conditions as the baselines; produced by [scripts/models.py](scripts/models.py). LightGBM ran with the settings it had before tuning (15 leaves, minimum leaf 200). [saam/models.py](saam/models.py) now holds the tuned settings and [reports/models_output.txt](reports/models_output.txt) was regenerated with them, so that file matches the "after" numbers in "Tuning", not the tables of this section.
 
 **"Start" task** (base rate 3.28%)
 
@@ -316,7 +360,7 @@ Removing the "oldest" features on top of the cap gave nothing and was not adopte
 
 ### Operating point
 
-How the yes / no answer is cut out of the probability (decision 21). All numbers are from validation, LightGBM with untuned settings, mode "from 2024-07"; 277 Kyiv alerts in the period.
+How the yes / no answer is cut out of the probability (decision 21). All numbers are from validation, LightGBM with the settings it had before tuning, mode "from 2024-07"; 277 Kyiv alerts in the period.
 
 **"Start": the price of each recall level**
 
@@ -439,35 +483,11 @@ Reference: saying "yes" always gives 5.5% precision.
 - **The target was not met.** The agreed rule was that a "yes, it will end" is right at least 60% of the time. On the test it was right 45% of the time, and the program said "yes" during 88% of alert time. At this threshold the forecast is barely better than always saying "yes" (41%), and no method reached 60%.
 - **The model's quality dropped, not only the threshold.** PR-AUC fell from 76% on validation to 56% on the test. In the default mode the Brier score (0.252) is worse than that of the simple duration curve (0.233) and worse than predicting the base rate for every point (0.242). LightGBM still ranks moments better than the baselines (PR-AUC 56–59% against 51%), but its probabilities are too high: 55% predicted on average against 41% observed.
 - **Diagnostics after the fact** (they explain the result and change nothing): the model that was not retrained on validation gives the same 46% precision, so the final retraining is not the cause. Even with hindsight, 60% precision is reachable on the test only for 20–40% of the endings. Alert durations in the test period look like those in validation (median 30 min against 29), so the change is in how the neighbours' state relates to the end of a Kyiv alert.
-- **What follows for the program (decision 22):** the "end" answer stays a yes / no, as agreed at the start. Claude proposed showing only the probability; the author kept the binary answer. The measured precision of 45% is stated here and shown in the `--debug` panel, so the weakness is documented rather than hidden.
+- **What follows for the program (decision 22):** the "end" answer stays a yes / no, as agreed at the start. Claude proposed showing only the probability; the author kept the binary answer. The measured precision of 45% is stated here and printed under the answer every time the "end" question is shown, so the weakness is in front of the user rather than hidden.
 
 ![Test, calibration](reports/figures/test_calibration.png)
 
 **How far these numbers can be trusted.** One test period of 68 days with 171 alerts; neighbouring 5-minute points are near-copies, so the effective sample is much smaller than the point counts suggest. No confidence intervals were computed. The validation period was used for many choices (feature cap, settings, thresholds), so validation numbers are optimistic; the gap between validation and test on "end" shows by how much they can be.
-
-**Time split** (no shuffling, gap ≥ `H` between parts)
-
-| Part | Period | Kyiv alert starts |
-|---|---|---|
-| Train | 2022-03-15 or 2024-07-01 (decision 14) … 2025-12-31 | 1,819 or 825 |
-| Validation | 2026-01-01 … 2026-06-30 | 277 |
-| Final training (train + validation) | … 2026-06-30 | 2,096 or 1,102 |
-| Test | 2026-07-01 … 2026-09-06 | 171 |
-
-The split was changed after EDA. Options considered:
-
-| Option | Idea | Verdict |
-|---|---|---|
-| 1 | Keep validation at April–June 2026 | Every choice rests on 139 events; a rough error of ±8 percentage points on recall makes the comparison of training periods unreliable |
-| 2 | Widen validation to January–June 2026 | 277 events and both winter and summer in validation, but training loses the 138 freshest alert starts and a third of the raion-level data |
-| **3** | Option 2, then retrain the final model on train + validation | **chosen**: reliable choices and the freshest data in the final model |
-| 4 | Rolling validation over several periods | Most reliable, too much code and time for a two-day MVP |
-
-Procedure: thresholds, hyperparameters, feature set and the training period are chosen on validation. They are then frozen, the model is retrained on train + validation with the same settings, and the test set is opened once.
-
-Cost of option 3: the threshold is picked for a model trained on less data and may be slightly off after retraining; this cannot be checked on anything but the test set.
-
-The test period is not moved even though it is unusually intense: choosing it to get a better number would be dishonest.
 
 ## Known limitations
 
@@ -475,6 +495,7 @@ The test period is not moved even though it is unusually intense: choosing it to
 - **Yellow and red alerts.** Since September 2026 alerts carry levels (yellow — drones, red — missiles); ubilling returns them. The model is trained on data without levels, so the live forecast is outside the training distribution and there is nothing to measure its quality on under the new regime. The introduction date (6 September) comes from a third-party project, not an official source.
 - **Change of granularity.** Raion-level data barely exists before mid-2025, so raion-based features (decision 13) are degenerate in older years. For Chernihiv the oblast flag fires about twice as often after the move to raions.
 - **Not all alerts are predictable from neighbours.** 37% of city alerts start with no alert in Kyiv oblast.
+- **The "end" forecast is a weak hint.** On the test period its "yes" was right 45% of the time against a 60% target; the program says so under the answer.
 - **The live source is volunteer-run.** Ubilling proxies third-party sources that do not always agree with each other; not for safety decisions.
 
 ## Corrections log
@@ -514,15 +535,19 @@ Who corrected whom and what changed.
 | Test → Claude | Claude chose "from 2024-07" as the default mode and LightGBM as clearly the best model on the strength of validation | On the test the full-history mode was slightly ahead on "start", and the logistic regression came within 0.4–1.8 points of LightGBM. Both choices stay as frozen, with the weaker evidence stated |
 | Author → Claude | After the test Claude proposed showing only a probability for "end", without yes / no | The author kept yes / no, as decided at the start (decision 22) |
 | Author → Claude | Claude built a tile map of Ukraine placed by geography; it worked on the first prototype | The author did not like how it looked and replaced it with a plain wall of regions (decision 10) |
+| Author → Claude | The 45% test precision of the "end" forecast was shown only with `--debug` | The author moved it under the answer in every output mode (decision 22): a display change, the model is untouched |
+| Author → Claude | The debug panel listed "main features of the model" next to a forecast, which read as the reasons for that forecast | It is the model's global importance by gain, the same for every forecast; renamed and labelled as such at the author's request |
+| Author → Claude | The list of oblasts adjacent to Kyiv oblast was written by Claude from memory and never checked | Checked against a source at the author's request: Zhytomyr, Vinnytsia, Cherkasy, Poltava and Chernihiv — the list was right, nothing changes in the baselines or the frequency table |
+| Author → Claude | README still said "shows a map", counted 23 tests, and a docstring said the program is "not left running" | The author listed the stale places; Claude re-read the whole README against the code and fixed these and others (regenerated output files that no longer matched their tables, the section order) |
 
 ## Stack
 
-Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich · requests · pytest
+Python 3.11 · pandas · numpy · scikit-learn · lightgbm · joblib · matplotlib · rich · requests · pytest (versions pinned in `requirements.txt`)
 
 ## Plan
 
 1. ~~EDA~~ — done, see "Exploratory analysis".
-2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features; 23 tests in total by now.
+2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features; the test suite has 31 tests by now.
 3. ~~Baselines and metrics~~ — done, see "Baseline results".
 4. ~~Probabilistic algorithm and LightGBM, comparison~~ — done, see "Model results", "Tuning" and "Test results".
 5. ~~Ubilling client, `--replay` mode~~ — done, see "How to run".
@@ -532,3 +557,8 @@ Possible extensions:
 
 - Use the alerts.in.ua history endpoint (last month only) for a rough quality check under the new yellow/red regime. The token would be read from an environment variable and never committed.
 - Now that the program keeps running (decision 23), track the moment of the last Kyiv all-clear and add "minutes since the last all-clear" as a feature (1.6–1.9× the base rate in the first hour, see decision 18). This needs retraining and a fresh, unused test period.
+
+## Licences
+
+- Data: `official_data_uk.csv` is © 2022 Vadym Klymenko, MIT License. Attribution and the full licence text are in [DATA_LICENSE.md](DATA_LICENSE.md).
+- Code of this project: no licence chosen yet.

@@ -59,23 +59,29 @@ def render_forecast(snap, fc):
     # "yes" is the bad news for the start task and the good news for the end task
     good = fc.answer == (fc.task == "end")
     answer = Text.assemble((fc.question + "   "), (" YES " if fc.answer else " NO ", "bold white on green4" if good else "bold white on red3"))
-    return Panel(Group(state, Text(), answer), title="Forecast", title_align="left", padding=(1, 2), expand=False)
+    lines = [state, Text(), answer]
+    if fc.caveat:
+        lines += [Text(), Text(fc.caveat, style="yellow3")]
+    return Panel(Group(*lines), title="Forecast", title_align="left", padding=(1, 2), expand=False)
 
 
 def render_debug(snap, fc):
     t = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
     t.add_row("probability", f"{fc.probability:.1%}")
     t.add_row("threshold for \"yes\"", f"{fc.threshold:.1%}")
-    t.add_row("measured quality", fc.test_note)
+    if not fc.caveat:  # for "end" the same line is already under the answer
+        t.add_row("measured quality", fc.test_note)
     t.add_row("frequency table", f"{fc.table_probability:.1%}  ({', '.join(f'{k}: {v}' for k, v in fc.table_cell.items())})")
-    f = Table(title="Main features of the model", title_justify="left", title_style="bold", box=None, padding=(0, 2, 0, 0))
+    f = Table(title="Global feature importance", title_justify="left", title_style="bold", box=None, padding=(0, 2, 0, 0))
     f.add_column("feature")
     f.add_column("value now", justify="right")
-    f.add_column("share of gain", justify="right")
+    f.add_column("global importance", justify="right")
     for name, value, share in fc.top_features:
         f.add_row(name, "-" if pd.isna(value) else f"{value:.3g}", f"{share:.1%}")
+    what = Text("Share of the model's total gain over all training data. "
+                "The same list for every forecast, not an explanation of this one.", style="grey62")
     notes = [Text(f"note: {n}", style="grey62") for n in snap.notes]
-    return Panel(Group(t, Text(), f, *notes), title="Debug", title_align="left", padding=(1, 2), expand=False)
+    return Panel(Group(t, Text(), f, what, *notes), title="Debug", title_align="left", padding=(1, 2), expand=False)
 
 
 def render(snap, fc, debug=False, as_list=False, status=None):

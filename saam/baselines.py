@@ -5,7 +5,9 @@ from sklearn.linear_model import LogisticRegression
 
 from .dataset import varying_columns
 
-# Oblasts that share a border with Kyiv oblast.
+# Oblasts that share a border with Kyiv oblast: Zhytomyr (west), Vinnytsia
+# (southwest), Cherkasy (south), Poltava (southeast), Chernihiv (east and
+# northeast). Source: https://en.wikipedia.org/wiki/Kyiv_Oblast#Geography
 ADJACENT = ["chernihiv", "zhytomyr", "cherkasy", "poltava", "vinnytsia"]
 NEIGHBOURS = ["kyiv_oblast"] + ADJACENT
 

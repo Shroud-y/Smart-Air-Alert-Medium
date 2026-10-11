@@ -48,11 +48,15 @@ def print_plain(snap, fc, debug):
     else:
         print("Kyiv city: no alert")
     print(f"\n{fc.question}  ->  {'YES' if fc.answer else 'NO'}")
+    if fc.caveat:
+        print(fc.caveat)
     if debug:
         print(f"\n[debug] probability {fc.probability:.1%}, threshold {fc.threshold:.1%}")
-        print(f"[debug] {fc.test_note}")
+        if not fc.caveat:  # for "end" the same line is already under the answer
+            print(f"[debug] {fc.test_note}")
         print(f"[debug] frequency table: {fc.table_probability:.1%} for " + ", ".join(f"{k}: {v}" for k, v in fc.table_cell.items()))
-        print("[debug] main features of the model (value now, share of the model's gain):")
+        print("[debug] global feature importance - the same list for every forecast, not an explanation of this one")
+        print("[debug] (feature, value now, share of the model's total gain over all training data):")
         for name, value, share in fc.top_features:
             shown = "-" if pd.isna(value) else f"{value:g}"
             print(f"          {name:28s} {shown:>8s}   {share:.1%}")

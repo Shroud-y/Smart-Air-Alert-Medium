@@ -19,8 +19,8 @@ DEFAULT_MODE = "recent"
 TEST_NOTE = {
     ("start", "recent"): "on the test period a \"yes\" was right 18% of the time and 64% of alerts were warned of",
     ("start", "full"): "on the test period a \"yes\" was right 27% of the time and 63% of alerts were warned of",
-    ("end", "recent"): "on the test period a \"yes\" was right only 45% of the time (target 60%) - a weak hint",
-    ("end", "full"): "on the test period a \"yes\" was right only 45% of the time (target 60%) - a weak hint",
+    ("end", "recent"): "on the test period a \"yes\" was right only 45% of the time (target 60%)",
+    ("end", "full"): "on the test period a \"yes\" was right only 45% of the time (target 60%)",
 }
 
 
@@ -37,7 +37,14 @@ class Forecast:
     table_cell: dict  # factor -> level, the readable explanation
     test_note: str
     features: object  # one-row DataFrame, for the debug panel
-    top_features: list  # (name, value, share of gain)
+    top_features: list  # (name, value now, global importance): the model's top features overall, not for this forecast
+
+    @property
+    def caveat(self):
+        """Shown under the answer in every mode. The "end" forecast missed its
+        target on the test, so its weakness is stated next to the answer
+        (README, decision 22). None for the "start" forecast."""
+        return f"Weak hint: {self.test_note}." if self.task == "end" else None
 
     @property
     def question(self):
