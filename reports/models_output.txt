@@ -11,6 +11,16 @@ baseline: StateLogReg from 2024-07    11.3  0.0304      0.147       17.9    27.9
 frequency table       from 2024-07     9.9  0.0305      0.077       13.8    42.9  20.8       10.2               2.12
 LightGBM              from 2024-07    12.5  0.0302      0.115       19.6    30.8  23.9        5.2               2.39
 
+== START: at the agreed operating point (recall >= 40%), threshold picked on validation
+                                    threshold  precision_%  recall_%  says_yes_%  false_yes_per_day  alerts_warned_%
+model                 train                                                                                         
+baseline: StateLogReg full history      0.091         12.2      40.0        10.7               2.82             54.2
+frequency table       full history      0.083         13.7      40.2         9.6               2.29             53.1
+LightGBM              full history      0.095         16.0      40.0         8.2               3.20             57.0
+baseline: StateLogReg from 2024-07      0.112         13.4      40.6         9.9               2.24             52.7
+frequency table       from 2024-07      0.080         13.6      40.1         9.7               2.19             52.7
+LightGBM              from 2024-07      0.071         15.0      40.0         8.8               3.64             54.5
+
   frequency table (from 2024-07): 64 cells, overall rate 3.35%; n = training points, k = followed by the event
            Kyiv oblast adjacent oblasts    time of day      n      k   raw     p
    0   alert 15-60 min      3+ adjacent    night 22-06   1823  435.0  23.9  23.3
@@ -47,6 +57,16 @@ LightGBM                full history    72.2  0.2098      0.216       58.7    86
 baseline: DurationCurve from 2024-07    60.8  0.2309      0.223       56.5    82.4  67.0       67.6               0.18
 frequency table         from 2024-07    64.5  0.2238      0.282       57.0    82.1  67.3       66.8               0.23
 LightGBM                from 2024-07    75.1  0.1940      0.259       61.7    83.5  70.9       62.7               0.22
+
+== END: at the agreed operating point (precision >= 60%), threshold picked on validation
+                                      threshold  precision_%  recall_%  says_yes_%
+model                   train                                                     
+baseline: DurationCurve full history      0.395         60.7      70.7        54.0
+frequency table         full history      0.354         61.9      67.6        50.5
+LightGBM                full history      0.248         60.0      81.0        62.5
+baseline: DurationCurve from 2024-07      0.393         60.7      70.7        54.0
+frequency table         from 2024-07      0.343         62.5      65.7        48.7
+LightGBM                from 2024-07      0.218         60.0      86.2        66.6
 
   frequency table (from 2024-07): 33 cells, overall rate 31.63%; n = training points, k = followed by the event
       Kyiv alert lasts         Kyiv oblast    time of day     n      k   raw     p

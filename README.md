@@ -38,6 +38,7 @@ The chance of an alert in Kyiv depends strongly on the state of neighbouring obl
 | 18 | Features use only a snapshot of the current state: which alerts are active and when they started. Nothing about alerts that have already ended | The live API reports only active alerts, and the program is opened for a quick look, not left running, so it cannot remember earlier events itself. "Minutes since the last Kyiv all-clear" was dropped for this reason, although it carries a moderate signal (1.6–1.9× the base rate in the first hour) |
 | 19 | "Minutes since an alert started" features of regions and raions are capped at 180 ("long ago"). The duration of the Kyiv city alert itself is not capped | Found on the first LightGBM run: for a region with a months-long alert the uncapped value is a day counter (one hromada alert in Kharkiv oblast lasted 604 days), and the model learned the calendar date from it. See "Model results" |
 | 20 | The probabilistic algorithm is a table of conditional frequencies over three factors, smoothed towards the overall rate. "Start": state of Kyiv oblast (quiet / alert < 15 / 15–60 / > 60 min) × number of adjacent oblasts under alert (0, 1, 2, 3+) × time of day (4 parts), 64 cells. "End": how long the Kyiv alert has lasted (5 bands) × Kyiv oblast quiet or not × time of day | Every forecast can be read as a sentence ("night, oblast under alert for 20 min, three neighbours — 23%"), which suits the `--debug` panel. Naive Bayes over all flags was rejected: it assumes independent regions, and they are strongly linked |
+| 21 | The yes / no answer is cautious by design, and the caution points in opposite directions for the two tasks. "Start": the threshold must catch at least **40%** of pre-alert moments (recall). "End": a "yes, it will end" must be right at least **60%** of the time (precision) | The author's deliberate choice: an extra warning is better than a missed alert, and a perfect result is not expected from a learning project. For "end" the dangerous mistake is the opposite one — promising an all-clear that does not come. The numbers were chosen from a measured trade-off, see "Operating point"; Claude had proposed 50% and 70% |
 
 ## Data
 
@@ -178,7 +179,7 @@ No Kyiv alert in the dataset spans a switch moment (checked on all 9 switches); 
 - Precision / recall / F1 at a threshold picked on validation; the yes / no answer comes from this threshold.
 - Number of false "yes" per day. A false "yes" is an unbroken run of "yes" forecasts that is not followed by an alert.
 
-Until the threshold question is settled, the threshold is the one with the best F1.
+The baseline and first model tables below use the threshold with the best F1, which was the working rule before the operating point was agreed (decision 21). The "Operating point" section gives the same models at the agreed thresholds.
 
 **Baselines**
 
@@ -284,6 +285,60 @@ The most and least likely cells of the "start" frequency table (trained from 202
 
 Removing the "oldest" features on top of the cap gave nothing and was not adopted.
 
+### Operating point
+
+How the yes / no answer is cut out of the probability (decision 21). All numbers are from validation, LightGBM with untuned settings, mode "from 2024-07"; 277 Kyiv alerts in the period.
+
+**"Start": the price of each recall level**
+
+| Recall by moments | Precision of "yes" | Says "yes" (share of quiet time) | False "yes" per day | Alerts warned |
+|---|---|---|---|---|
+| 30% | 19.5% | 5% | 2.3 | 47% |
+| **40% (chosen)** | **15.0%** | **9%** | **3.6** | **55%** |
+| 50% | 9.1% | 18% | 8.3 | 66% |
+| 60% | 6.3% | 31% | 12.5 | 75% |
+| 70% | 5.0% | 46% | 15.3 | 87% |
+| 80% | 4.5% | 59% | 15.6 | 92% |
+
+"Recall by moments" is the share of 5-minute moments before an alert at which the program said "yes". "Alerts warned" is the share of alerts preceded by at least one "yes" within 30 minutes — closer to what a user experiences, and always higher. For warned alerts the "yes" is typically already on at the start of the 30-minute window (median 25–27 min before the alert).
+
+The price rises steeply: beyond 60–70% the program says "yes" a third to a half of the time and turns into the "almost always yes" seen in the neighbour rule. At the chosen 40% it warns of a little over half of the alerts, says "yes" 9% of the quiet time, and about one "yes" in seven is right.
+
+**"End": the price of each precision level**
+
+| Precision of "yes, it will end" | Real endings caught | Says "yes" (share of alert time) |
+|---|---|---|
+| **60% (chosen)** | **86%** | **67%** |
+| 70% | 64% | 42% |
+| 80% | 43% | 25% |
+| 90% | 20% | 10% |
+
+At the chosen 60%, four in ten promises of an all-clear within 30 minutes are wrong. The base rate is 46%, so the gain over saying "yes" always is 14 points of precision.
+
+**All models at the agreed operating point**
+
+| "Start", recall ≥ 40% | Trained on | Precision | Says "yes" | False "yes" per day | Alerts warned |
+|---|---|---|---|---|---|
+| Best baseline (logistic regression) | full history | 12.2% | 10.7% | 2.8 | 54% |
+| Frequency table | full history | 13.7% | 9.6% | 2.3 | 53% |
+| LightGBM | full history | 16.0% | 8.2% | 3.2 | 57% |
+| Best baseline (logistic regression) | from 2024-07 | 13.4% | 9.9% | 2.2 | 53% |
+| Frequency table | from 2024-07 | 13.6% | 9.7% | 2.2 | 53% |
+| LightGBM | from 2024-07 | 15.0% | 8.8% | 3.6 | 55% |
+
+| "End", precision ≥ 60% | Trained on | Real endings caught | Says "yes" |
+|---|---|---|---|
+| Baseline (duration curve) | full history | 71% | 54% |
+| Frequency table | full history | 68% | 51% |
+| LightGBM | full history | 81% | 63% |
+| Baseline (duration curve) | from 2024-07 | 71% | 54% |
+| Frequency table | from 2024-07 | 66% | 49% |
+| LightGBM | from 2024-07 | 86% | 67% |
+
+LightGBM is the most precise at the same recall and says "yes" for the least time, but its "yes" comes in more separate episodes, so it has more false episodes per day than the simpler methods (3.2–3.6 against 2.2–2.8).
+
+The thresholds are picked on validation. The test period is more intense, so the actual recall and precision there may differ from 40% and 60%.
+
 **Time split** (no shuffling, gap ≥ `H` between parts)
 
 | Part | Period | Kyiv alert starts |
@@ -346,6 +401,8 @@ Who corrected whom and what changed.
 | Claude → Claude | The feature "minutes since the oldest active alert started", added by Claude under decision 13 | For Kharkiv it turned out to be a day counter — the same hidden clock Claude had warned about for flags. Capped at 180 min (decision 19); the author approved after seeing that the gain is modest but real |
 | Claude → Claude | Expected the frequency table to land between the baseline and LightGBM | On "start" it is below the best baseline (10.0% against 11.3%) |
 | Author → Claude | Claude proposed fixing the training period to "from 2024-07" for both tasks | The author did not trust a choice made on a margin within noise and kept both periods as modes of the program. Claude added one condition: the default mode is named before the test set is opened, so that it is not picked by its test score |
+| Author → Claude | Thresholds were picked by the best F1, a formal rule Claude used by default | The author set the principle — better an extra warning than a missed alert — and chose recall 40% for "start" and precision 60% for "end" from the measured trade-off; Claude had suggested 50% and 70% |
+| Claude → author | "Better to warn once more" was stated for the program as a whole | For "end" the cautious direction is the opposite: the dangerous mistake is a false promise of an all-clear, so the constraint there is on precision, not recall |
 
 ## Stack
 
@@ -354,9 +411,9 @@ Python 3.11 · pandas · numpy · scikit-learn · lightgbm · matplotlib · rich
 ## Plan
 
 1. ~~EDA~~ — done, see "Exploratory analysis".
-2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features, 14 tests.
+2. ~~Data loading and cleaning, time grid, features, target + leak tests~~ — done: 112 features, 18 tests.
 3. ~~Baselines and metrics~~ — done, see "Baseline results".
-4. Probabilistic algorithm and LightGBM, comparison — first versions done, see "Model results". Left: thresholds, tuning LightGBM, then the final retraining of both modes and the test.
+4. Probabilistic algorithm and LightGBM, comparison — first versions done, see "Model results". Left: tuning LightGBM, then the final retraining of both modes and the test.
 5. Ubilling client, `--replay` mode.
 6. Console interface: map, forecast, `--debug` panel.
 

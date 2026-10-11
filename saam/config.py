@@ -12,3 +12,9 @@ TRAIN_START_RECENT = "2024-07-01"
 TRAIN_END = "2026-01-01"
 VAL_START, VAL_END = "2026-01-01", "2026-07-01"
 TEST_START, TEST_END = "2026-07-01", "2026-09-07"
+
+# Operating points of the yes / no answer (README, decision 21).
+# "Start": the threshold must catch at least this share of pre-alert moments.
+START_MIN_RECALL = 0.40
+# "End": a "yes, it will end" must be right at least this often.
+END_MIN_PRECISION = 0.60

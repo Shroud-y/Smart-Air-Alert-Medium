@@ -10,6 +10,36 @@ def best_f1_threshold(y, score):
     return float(t[int(np.argmax(f1))])
 
 
+def threshold_for_recall(y, score, min_recall):
+    """Highest threshold whose recall is at least `min_recall`."""
+    p, r, t = precision_recall_curve(y, score)
+    return float(t[np.flatnonzero(r[:-1] >= min_recall)[-1]])
+
+
+def threshold_for_precision(y, score, min_precision):
+    """Among thresholds whose precision is at least `min_precision`, the one
+    with the highest recall. None if the precision cannot be reached."""
+    p, r, t = precision_recall_curve(y, score)
+    ok = np.flatnonzero(p[:-1] >= min_precision)
+    if len(ok) == 0:
+        return None
+    return float(t[ok[np.argmax(r[:-1][ok])]])
+
+
+def alerts_warned(times, pred, starts, horizon_min):
+    """Share of alerts (epoch-second `starts`) preceded by at least one "yes"
+    within the horizon. Only alerts whose whole window lies inside `times`."""
+    t = np.asarray(times, "datetime64[s]").astype("int64")
+    yes = np.sort(t[np.asarray(pred, bool)])
+    h = horizon_min * 60
+    starts = np.asarray(starts)
+    starts = starts[(starts - h >= t.min()) & (starts <= t.max() + h)]
+    if len(starts) == 0:
+        return float("nan")
+    n_yes = np.searchsorted(yes, starts, "left") - np.searchsorted(yes, starts - h, "left")
+    return float((n_yes > 0).mean())
+
+
 def false_yes_episodes(y, pred, times):
     """Number of false "yes" episodes: maximal runs of consecutive "yes"
     predictions (consecutive grid points) that contain no positive label."""
